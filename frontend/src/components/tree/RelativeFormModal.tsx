@@ -102,8 +102,9 @@ export default function RelativeFormModal({
                     })
                     if (insertErr) throw new Error("Lỗi khi tạo gia đình: " + insertErr.message)
 
+                    const currentFamilies = m.families || []
                     const { error: upErr } = await supabase.from("people").update({
-                        families: [familyHandle]
+                        families: [...currentFamilies, familyHandle]
                     }).eq("handle", m.handle)
                     if (upErr) throw new Error(upErr.message)
                 }

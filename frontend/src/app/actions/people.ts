@@ -30,9 +30,11 @@ export async function upsertPerson(personData: any) {
         const supabase = await createClient()
         await checkAdminOrManager(supabase)
 
+        const { handle, ...rest } = personData
         const { error } = await supabase
             .from("people")
-            .upsert({ ...personData, updated_at: new Date().toISOString() })
+            .update({ ...rest, updated_at: new Date().toISOString() })
+            .eq("handle", handle)
 
         if (error) {
             console.error("Lỗi khi lưu thông tin thành viên:", error)

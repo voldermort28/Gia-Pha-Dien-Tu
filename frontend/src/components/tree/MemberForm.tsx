@@ -78,9 +78,11 @@ export default function MemberForm({
                 updated_at: new Date().toISOString(),
             }
 
-            const { error } = await supabase
-                .from("people")
-                .upsert(dbFields)
+            const isEdit = !!initialData?.handle;
+
+            const { error } = isEdit
+                ? await supabase.from("people").update(dbFields).eq("handle", handle)
+                : await supabase.from("people").insert(dbFields);
 
             if (error) {
                 toast.error(error.message || "Đã xảy ra lỗi khi lưu Dữ liệu.")
