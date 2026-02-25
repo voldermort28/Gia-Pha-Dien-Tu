@@ -25,7 +25,7 @@ import { toast } from "sonner"
 
 interface MemberFormProps {
     initialData?: TreeNode
-    onSuccess?: () => void
+    onSuccess?: (handle: string) => void
     onCancel?: () => void
 }
 
@@ -88,7 +88,7 @@ export default function MemberForm({
             }
 
             toast.success(initialData ? "Đã cập nhật thông tin thành công" : "Đã thêm thành viên mới")
-            if (onSuccess) onSuccess()
+            if (onSuccess) onSuccess(handle)
         } catch (err: any) {
             toast.error(err.message || "Đã xảy ra lỗi khi lưu Dữ liệu.")
         } finally {

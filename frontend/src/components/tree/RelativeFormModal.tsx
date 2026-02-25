@@ -213,27 +213,29 @@ export default function RelativeFormModal({
                                             isPrivacyFiltered: false,
                                             isPatrilineal: relativeType === 'child' ? true : false,
                                         } as any}
-                                        onSuccess={async (newHandle) => {
-                                            // The MemberForm now saves the new person to DB.
-                                            // We just need to link them.
-                                            // Wait a tiny bit for DB replication if any
-                                            await new Promise(r => setTimeout(r, 500));
+                                        onSuccess={(newHandle: string) => {
+                                            const handleSuccess = async () => {
+                                                // The MemberForm now saves the new person to DB.
+                                                // We just need to link them.
+                                                // Wait a tiny bit for DB replication if any
+                                                await new Promise(r => setTimeout(r, 500));
 
-                                            // Construct a fake tree node to pass to handleLinkExisting
-                                            const newFakeNode: TreeNode = {
-                                                handle: newHandle || `M_${Date.now()}`, // if MemberForm doesn't return handle, use what we generated or fallback
-                                                displayName: "Thành viên mới",
-                                                gender: 1,
-                                                isLiving: true,
-                                                isPatrilineal: true,
-                                                isPrivacyFiltered: false,
-                                                families: [],
-                                                parentFamilies: [],
-                                                children: []
+                                                // Construct a fake tree node to pass to handleLinkExisting
+                                                const newFakeNode: TreeNode = {
+                                                    handle: newHandle || `M_${Date.now()}`,
+                                                    displayName: "Thành viên mới",
+                                                    gender: 1,
+                                                    generation: (member.generation || 0) + (relativeType === 'child' ? 1 : 0),
+                                                    isLiving: true,
+                                                    isPatrilineal: true,
+                                                    isPrivacyFiltered: false,
+                                                    families: [],
+                                                    parentFamilies: [],
+                                                };
+                                                // Actually, the handleLinkExisting fetches from DB anyway, so it just needs the handle!
+                                                await handleLinkExisting(newFakeNode);
                                             };
-
-                                            // Actually, the handleLinkExisting fetches from DB anyway, so it just needs the handle!
-                                            await handleLinkExisting(newFakeNode);
+                                            handleSuccess();
                                         }}
                                         onCancel={() => setIsCreatingNew(false)}
                                     />

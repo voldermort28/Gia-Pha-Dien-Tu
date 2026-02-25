@@ -29,7 +29,6 @@ interface MemberDetailModalProps {
     isOpen: boolean
     onClose: () => void
     onAddRelative?: (parentId: string, type: 'child' | 'spouse') => void
-    onAddRelative?: (parentId: string, type: 'child' | 'spouse') => void
     onUnlinkSuccess?: () => void
     onEditSuccess?: () => void
     refreshData?: () => void
