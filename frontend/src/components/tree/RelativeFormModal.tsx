@@ -1,0 +1,196 @@
+"use client"
+
+import { useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Search, Plus, UserPlus, X, Loader2, ArrowLeft } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import type { TreeNode } from "@/lib/supabase-data"
+import { toast } from "sonner"
+import { linkRelativeAction } from "@/app/actions/families"
+// import MemberForm from "./MemberForm" // Will use in phase 2 if they choose "Add new"
+
+interface RelativeFormModalProps {
+    member: TreeNode | null
+    relativeType: 'child' | 'spouse' | null
+    isOpen: boolean
+    onClose: () => void
+    onSuccess: () => void
+    allPeople: TreeNode[] // For searching existing people
+}
+
+export default function RelativeFormModal({
+    member,
+    relativeType,
+    isOpen,
+    onClose,
+    onSuccess,
+    allPeople
+}: RelativeFormModalProps) {
+    const [searchQuery, setSearchQuery] = useState("")
+    const [isCreatingNew, setIsCreatingNew] = useState(false)
+    const [isSubmitting, setIsSubmitting] = useState(false)
+
+    if (!isOpen || !member || !relativeType) return null
+
+    const handleLinkExisting = async (existingMember: TreeNode) => {
+        setIsSubmitting(true)
+        try {
+            await linkRelativeAction(member.handle, existingMember.handle, relativeType)
+
+            toast.success(`Đã thêm ${existingMember.displayName} làm ${relativeType === 'child' ? 'con' : 'vợ/chồng'} của ${member.displayName}!`)
+            onSuccess()
+            onClose()
+        } catch (error: any) {
+            toast.error(error.message || "Có lỗi xảy ra khi liên kết thành viên.")
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    // Filter people that are NOT the current member, and optionally filter by gender for spouses
+    const searchResults = allPeople.filter(p => {
+        if (p.handle === member.handle) return false
+        if (searchQuery.length < 2) return false
+
+        const terms = searchQuery.toLowerCase().split(' ')
+        const name = p.displayName.toLowerCase()
+        const handle = p.handle.toLowerCase()
+
+        return terms.every(t => name.includes(t) || handle.includes(t))
+    }).slice(0, 5) // Limit to 5 results for UI neatness
+
+    return (
+        <AnimatePresence>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                    onClick={onClose}
+                />
+
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                    className="relative w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden z-10 flex flex-col max-h-[90vh]"
+                >
+                    {/* Header */}
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                        <div>
+                            <h2 className="text-xl font-serif font-bold text-slate-800">
+                                Thêm {relativeType === 'child' ? 'con' : 'vợ/chồng'}
+                            </h2>
+                            <p className="text-xs text-slate-500 mt-1">
+                                Cho thành viên: <span className="font-semibold text-slate-700">{member.displayName}</span>
+                            </p>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="p-2 -mr-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    <div className="p-6 overflow-y-auto">
+                        {isCreatingNew ? (
+                            <div className="space-y-4">
+                                <button
+                                    onClick={() => setIsCreatingNew(false)}
+                                    className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 -ml-2 rounded-md transition-colors w-fit"
+                                >
+                                    <ArrowLeft className="w-4 h-4" /> Quay lại tìm kiếm
+                                </button>
+
+                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+                                    Tính năng <span className="font-semibold">Tạo mới trực tiếp</span> đang được hoàn thiện.
+                                    Tạm thời bạn có thể tạo thành viên mới từ giao diện chính, sau đó dùng công cụ
+                                    <span className="font-semibold"> Tìm kiếm có sẵn</span> để liên kết.
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {/* Search Section */}
+                                <div className="space-y-3">
+                                    <label className="text-sm font-medium text-slate-700">
+                                        1. Tìm thành viên đã có trên cây
+                                    </label>
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                        <Input
+                                            placeholder="Nhập tên hoặc mã ID (tối thiểu 2 ký tự)..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="pl-9 bg-slate-50"
+                                        />
+                                    </div>
+
+                                    {/* Search Results */}
+                                    {searchQuery.length >= 2 && (
+                                        <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                                            {searchResults.length > 0 ? (
+                                                <div className="divide-y divide-slate-100">
+                                                    {searchResults.map(p => (
+                                                        <div key={p.handle} className="p-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                                                            <div>
+                                                                <p className="text-sm font-medium text-slate-800">{p.displayName}</p>
+                                                                <p className="text-xs text-slate-500">
+                                                                    ID: {p.handle} {p.birthYear ? `· Sinh ${p.birthYear}` : ''}
+                                                                </p>
+                                                            </div>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-8 py-0 px-3 bg-white hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200"
+                                                                onClick={() => handleLinkExisting(p)}
+                                                                disabled={isSubmitting}
+                                                            >
+                                                                {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : "Chọn"}
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="p-4 text-center text-sm text-slate-500">
+                                                    Không tìm thấy thành viên nào phù hợp.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="relative py-3">
+                                    <div className="absolute inset-0 flex items-center">
+                                        <div className="w-full border-t border-slate-200"></div>
+                                    </div>
+                                    <div className="relative flex justify-center text-sm">
+                                        <span className="px-2 bg-white text-slate-400">Hoặc</span>
+                                    </div>
+                                </div>
+
+                                {/* Create New Section */}
+                                <div className="space-y-3">
+                                    <label className="text-sm font-medium text-slate-700">
+                                        2. Tạo thành viên mới tinh
+                                    </label>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="w-full flex items-center justify-center gap-2 h-12 border-dashed border-2 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                                        onClick={() => setIsCreatingNew(true)}
+                                    >
+                                        <UserPlus className="w-4 h-4" />
+                                        Nhập thông tin người mới
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </motion.div>
+            </div>
+        </AnimatePresence>
+    )
+}

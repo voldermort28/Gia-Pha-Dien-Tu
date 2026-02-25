@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/auth-provider';
 import { ContributeDialog } from '@/components/contribute-dialog';
+import MemberDetailModal from '@/components/tree/MemberDetailModal';
+import RelativeFormModal from '@/components/tree/RelativeFormModal';
 import { Search, ZoomIn, ZoomOut, Maximize2, TreePine, Eye, Users, GitBranch, User, ArrowDownToLine, ArrowUpFromLine, Crosshair, X, ChevronDown, ChevronRight, BarChart3, Package, Link, ChevronsDownUp, ChevronsUpDown, Copy, Pencil, Save, RotateCcw, Trash2, ArrowUp, ArrowDown, GripVertical, MessageSquarePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -180,6 +182,8 @@ export default function TreeViewPage() {
     const [hoveredHandle, setHoveredHandle] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<{ handle: string; x: number; y: number } | null>(null);
     const [contributePerson, setContributePerson] = useState<{ handle: string; name: string } | null>(null);
+    const [selectedMemberForDetail, setSelectedMemberForDetail] = useState<TreeNode | null>(null);
+    const [relativeModalState, setRelativeModalState] = useState<{ member: TreeNode | null, type: 'child' | 'spouse' | null }>({ member: null, type: null });
     const [linkCopied, setLinkCopied] = useState(false);
 
     // F4: Collapsible branches
@@ -928,7 +932,7 @@ export default function TreeViewPage() {
                                         person={person}
                                         x={contextMenu.x}
                                         y={contextMenu.y}
-                                        onViewDetail={() => { router.push(`/people/${person.handle}`); setContextMenu(null); }}
+                                        onViewDetail={() => { setSelectedMemberForDetail(person); setContextMenu(null); }}
                                         onShowDescendants={() => { setFocusPerson(person.handle); setViewMode('descendant'); setContextMenu(null); }}
                                         onShowAncestors={() => { setFocusPerson(person.handle); setViewMode('ancestor'); setContextMenu(null); }}
                                         onSetFocus={() => { panToPerson(person.handle); setContextMenu(null); }}
@@ -1061,6 +1065,37 @@ export default function TreeViewPage() {
                     onClose={() => setContributePerson(null)}
                 />
             )}
+            {/* Detail/Edit Modal */}
+            <MemberDetailModal
+                member={selectedMemberForDetail}
+                isOpen={!!selectedMemberForDetail}
+                onClose={() => setSelectedMemberForDetail(null)}
+                refreshData={async () => {
+                    try {
+                        const data = await fetchTreeData();
+                        if (data.people.length > 0) setTreeData(data);
+                    } catch { }
+                }}
+                onAddRelative={(parentId, type) => {
+                    setRelativeModalState({ member: selectedMemberForDetail, type });
+                    setSelectedMemberForDetail(null); // Close the detail modal
+                }}
+            />
+
+            {/* Add Relative Modal */}
+            <RelativeFormModal
+                member={relativeModalState.member}
+                relativeType={relativeModalState.type}
+                isOpen={!!relativeModalState.member && !!relativeModalState.type}
+                onClose={() => setRelativeModalState({ member: null, type: null })}
+                allPeople={treeData?.people || []}
+                onSuccess={async () => {
+                    try {
+                        const data = await fetchTreeData();
+                        if (data.people.length > 0) setTreeData(data);
+                    } catch { }
+                }}
+            />
         </div>
     );
 }

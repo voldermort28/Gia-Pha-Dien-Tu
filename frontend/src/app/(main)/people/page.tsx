@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, Search, Filter } from 'lucide-react';
+import MemberDetailModal from '@/components/tree/MemberDetailModal';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +35,7 @@ export default function PeopleListPage() {
     const [search, setSearch] = useState('');
     const [genderFilter, setGenderFilter] = useState<number | null>(null);
     const [livingFilter, setLivingFilter] = useState<boolean | null>(null);
+    const [selectedMember, setSelectedMember] = useState<Person | null>(null);
 
     useEffect(() => {
         const fetchPeople = async () => {
@@ -118,7 +120,7 @@ export default function PeopleListPage() {
                                     <TableRow
                                         key={p.handle}
                                         className="cursor-pointer hover:bg-accent/50"
-                                        onClick={() => router.push(`/people/${p.handle}`)}
+                                        onClick={() => setSelectedMember(p as any)}
                                     >
                                         <TableCell className="font-medium">
                                             {p.displayName}
@@ -150,6 +152,34 @@ export default function PeopleListPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Detail/Edit Modal */}
+            <MemberDetailModal
+                member={selectedMember as any}
+                isOpen={!!selectedMember}
+                onClose={() => setSelectedMember(null)}
+                refreshData={async () => {
+                    // Quick refresh logic to keep the list updated if edited
+                    try {
+                        const { supabase } = await import('@/lib/supabase');
+                        const { data, error } = await supabase
+                            .from('people')
+                            .select('handle, display_name, gender, birth_year, death_year, is_living, is_privacy_filtered')
+                            .order('display_name', { ascending: true });
+                        if (!error && data) {
+                            setPeople(data.map((row: Record<string, unknown>) => ({
+                                handle: row.handle as string,
+                                displayName: row.display_name as string,
+                                gender: row.gender as number,
+                                birthYear: row.birth_year as number | undefined,
+                                deathYear: row.death_year as number | undefined,
+                                isLiving: row.is_living as boolean,
+                                isPrivacyFiltered: row.is_privacy_filtered as boolean,
+                            })));
+                        }
+                    } catch { }
+                }}
+            />
         </div>
     );
 }

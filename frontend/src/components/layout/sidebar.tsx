@@ -86,7 +86,7 @@ export function Sidebar() {
                         {!collapsed && (
                             <div className="pt-4 pb-2">
                                 <span className="px-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                                    Quản trị
+                                    Quản trị (Admin)
                                 </span>
                             </div>
                         )}
