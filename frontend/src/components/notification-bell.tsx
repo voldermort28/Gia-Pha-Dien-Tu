@@ -17,12 +17,13 @@ export function NotificationBell() {
 
         const fetchCount = async () => {
             try {
-                const { count } = await supabase
+                const { count, error } = await supabase
                     .from('notifications')
                     .select('*', { count: 'exact', head: true })
                     .eq('user_id', user.id)
                     .eq('is_read', false);
-                setUnreadCount(count || 0);
+                if (!error) setUnreadCount(count || 0);
+                // Silently ignore if table doesn't exist (404)
             } catch { /* ignore */ }
         };
 
