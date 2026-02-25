@@ -343,10 +343,12 @@ function assignPositions(
         const item = children[0];
         const cx = patriCenterX - item.anchorX;
         if (item.subtree) {
-            assignPositions(item.subtree, cx, generation + 1, allNodes, placed);
+            const childGen = generation + 1;
+            assignPositions(item.subtree, cx, childGen, allNodes, placed);
         } else if (item.leaf && !placed.has(item.leaf.handle)) {
-            const childY = (generation + 1) * (CARD_H + V_SPACE);
-            allNodes.push({ node: item.leaf, x: cx, y: childY, generation: generation + 1 });
+            const childGen = generation + 1;
+            const childY = childGen * (CARD_H + V_SPACE);
+            allNodes.push({ node: item.leaf, x: cx, y: childY, generation: childGen });
             placed.add(item.leaf.handle);
         }
         return;
@@ -369,10 +371,12 @@ function assignPositions(
             const childStartX = childAnchorX - item.anchorX;
 
             if (item.subtree) {
-                assignPositions(item.subtree, childStartX, generation + 1, allNodes, placed);
+                const childGen = generation + 1;
+                assignPositions(item.subtree, childStartX, childGen, allNodes, placed);
             } else if (item.leaf && !placed.has(item.leaf.handle)) {
-                const childY = (generation + 1) * (CARD_H + V_SPACE);
-                allNodes.push({ node: item.leaf, x: childStartX, y: childY, generation: generation + 1 });
+                const childGen = generation + 1;
+                const childY = childGen * (CARD_H + V_SPACE);
+                allNodes.push({ node: item.leaf, x: childStartX, y: childY, generation: childGen });
                 placed.add(item.leaf.handle);
             }
         }
@@ -393,10 +397,12 @@ function assignPositions(
         let cx = blockStartX;
         for (const item of children) {
             if (item.subtree) {
-                assignPositions(item.subtree, cx, generation + 1, allNodes, placed);
+                const childGen = generation + 1;
+                assignPositions(item.subtree, cx, childGen, allNodes, placed);
             } else if (item.leaf && !placed.has(item.leaf.handle)) {
-                const childY = (generation + 1) * (CARD_H + V_SPACE);
-                allNodes.push({ node: item.leaf, x: cx, y: childY, generation: generation + 1 });
+                const childGen = generation + 1;
+                const childY = childGen * (CARD_H + V_SPACE);
+                allNodes.push({ node: item.leaf, x: cx, y: childY, generation: childGen });
                 placed.add(item.leaf.handle);
             }
             cx += item.width + H_SPACE;
@@ -431,7 +437,13 @@ export function computeLayout(people: TreeNode[], families: TreeFamily[]): Layou
     for (const fam of rootFamilies) {
         const subtree = buildSubtree(fam, personMap, familyMap, visited);
         if (!subtree) continue;
-        assignPositions(subtree, cursorX, 0, allNodes, placed);
+
+        // Find absolute generation of parents to set starting level
+        const fatherGen = fam.fatherHandle ? personMap.get(fam.fatherHandle)?.generation : undefined;
+        const motherGen = fam.motherHandle ? personMap.get(fam.motherHandle)?.generation : undefined;
+        const startGen = Math.max((fatherGen || 1), (motherGen || 1)) - 1;
+
+        assignPositions(subtree, cursorX, startGen, allNodes, placed);
         cursorX += subtree.width + H_SPACE;
     }
 
@@ -609,11 +621,11 @@ function assignGenerations(people: TreeNode[], families: TreeFamily[]): Map<stri
 
     for (const p of people) {
         if (p.parentFamilies.length === 0 && !gens.has(p.handle)) {
-            setGen(p.handle, 0);
+            setGen(p.handle, Math.max(0, (p.generation || 1) - 1));
         }
     }
     for (const p of people) {
-        if (!gens.has(p.handle)) setGen(p.handle, 0);
+        if (!gens.has(p.handle)) setGen(p.handle, Math.max(0, (p.generation || 1) - 1));
     }
 
     return gens;
