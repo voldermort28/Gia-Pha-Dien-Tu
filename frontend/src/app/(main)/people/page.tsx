@@ -185,7 +185,7 @@ export default function PeopleListPage() {
             {/* Add Member Modal */}
             {showAddForm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                    <div className="bg-background rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto m-4">
+                    <div className="bg-background rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
                         <MemberForm
                             onSuccess={() => {
                                 setShowAddForm(false);
