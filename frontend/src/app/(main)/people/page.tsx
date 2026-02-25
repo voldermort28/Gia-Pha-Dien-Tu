@@ -21,10 +21,14 @@ interface Person {
     handle: string;
     displayName: string;
     gender: number;
+    generation?: number;
     birthYear?: number;
     deathYear?: number;
     isLiving: boolean;
     isPrivacyFiltered: boolean;
+    isPatrilineal?: boolean;
+    families?: string[];
+    parentFamilies?: string[];
     _privacyNote?: string;
 }
 
@@ -37,28 +41,33 @@ export default function PeopleListPage() {
     const [livingFilter, setLivingFilter] = useState<boolean | null>(null);
     const [selectedMember, setSelectedMember] = useState<Person | null>(null);
 
+    const fetchPeople = async () => {
+        try {
+            const { supabase } = await import('@/lib/supabase');
+            const { data, error } = await supabase
+                .from('people')
+                .select('handle, display_name, gender, generation, birth_year, death_year, is_living, is_privacy_filtered, is_patrilineal, families, parent_families')
+                .order('display_name', { ascending: true });
+            if (!error && data) {
+                setPeople(data.map((row: Record<string, unknown>) => ({
+                    handle: row.handle as string,
+                    displayName: row.display_name as string,
+                    gender: row.gender as number,
+                    generation: row.generation as number | undefined,
+                    birthYear: row.birth_year as number | undefined,
+                    deathYear: row.death_year as number | undefined,
+                    isLiving: row.is_living as boolean,
+                    isPrivacyFiltered: row.is_privacy_filtered as boolean,
+                    isPatrilineal: row.is_patrilineal as boolean | undefined,
+                    families: row.families as string[] | undefined,
+                    parentFamilies: row.parent_families as string[] | undefined,
+                })));
+            }
+        } catch { /* ignore */ }
+        setLoading(false);
+    };
+
     useEffect(() => {
-        const fetchPeople = async () => {
-            try {
-                const { supabase } = await import('@/lib/supabase');
-                const { data, error } = await supabase
-                    .from('people')
-                    .select('handle, display_name, gender, birth_year, death_year, is_living, is_privacy_filtered')
-                    .order('display_name', { ascending: true });
-                if (!error && data) {
-                    setPeople(data.map((row: Record<string, unknown>) => ({
-                        handle: row.handle as string,
-                        displayName: row.display_name as string,
-                        gender: row.gender as number,
-                        birthYear: row.birth_year as number | undefined,
-                        deathYear: row.death_year as number | undefined,
-                        isLiving: row.is_living as boolean,
-                        isPrivacyFiltered: row.is_privacy_filtered as boolean,
-                    })));
-                }
-            } catch { /* ignore */ }
-            setLoading(false);
-        };
         fetchPeople();
     }, []);
 
@@ -158,27 +167,7 @@ export default function PeopleListPage() {
                 member={selectedMember as any}
                 isOpen={!!selectedMember}
                 onClose={() => setSelectedMember(null)}
-                refreshData={async () => {
-                    // Quick refresh logic to keep the list updated if edited
-                    try {
-                        const { supabase } = await import('@/lib/supabase');
-                        const { data, error } = await supabase
-                            .from('people')
-                            .select('handle, display_name, gender, birth_year, death_year, is_living, is_privacy_filtered')
-                            .order('display_name', { ascending: true });
-                        if (!error && data) {
-                            setPeople(data.map((row: Record<string, unknown>) => ({
-                                handle: row.handle as string,
-                                displayName: row.display_name as string,
-                                gender: row.gender as number,
-                                birthYear: row.birth_year as number | undefined,
-                                deathYear: row.death_year as number | undefined,
-                                isLiving: row.is_living as boolean,
-                                isPrivacyFiltered: row.is_privacy_filtered as boolean,
-                            })));
-                        }
-                    } catch { }
-                }}
+                refreshData={fetchPeople}
             />
         </div>
     );
