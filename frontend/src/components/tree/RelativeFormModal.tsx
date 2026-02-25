@@ -202,16 +202,15 @@ export default function RelativeFormModal({
                                 <div className="mt-4 border-t border-slate-100 pt-4">
                                     <MemberForm
                                         initialData={{
-                                            ...member, // just for some defaults but we'll clear it mostly
-                                            handle: `M_${Date.now()}`,
+                                            // Don't spread the entire member object to avoid leaking unrelated data like parent_families
                                             displayName: "",
-                                            gender: relativeType === 'spouse' ? (member.gender === 1 ? 2 : 1) : 1, // opposite gender for spouse default
-                                            generation: member.generation ? (relativeType === 'child' ? member.generation + 1 : member.generation) : "",
-                                            birthYear: undefined as any,
-                                            deathYear: undefined as any,
+                                            gender: relativeType === 'spouse' ? (member.gender === 1 ? 2 : 1) : 1,
+                                            generation: member.generation ? (relativeType === 'child' ? member.generation + 1 : member.generation) : 1,
                                             isLiving: true,
                                             isPrivacyFiltered: false,
                                             isPatrilineal: relativeType === 'child' ? true : false,
+                                            birthYear: undefined,
+                                            deathYear: undefined,
                                         } as any}
                                         onSuccess={(newHandle: string) => {
                                             const handleSuccess = async () => {
