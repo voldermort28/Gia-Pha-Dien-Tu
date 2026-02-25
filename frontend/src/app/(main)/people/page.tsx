@@ -2,8 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, Search, Filter } from 'lucide-react';
+import { Users, Search, UserPlus } from 'lucide-react';
 import MemberDetailModal from '@/components/tree/MemberDetailModal';
+import MemberForm from '@/components/tree/MemberForm';
+import { useAuth } from '@/components/auth-provider';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -34,12 +36,14 @@ interface Person {
 
 export default function PeopleListPage() {
     const router = useRouter();
+    const { isMember } = useAuth();
     const [people, setPeople] = useState<Person[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [genderFilter, setGenderFilter] = useState<number | null>(null);
     const [livingFilter, setLivingFilter] = useState<boolean | null>(null);
     const [selectedMember, setSelectedMember] = useState<Person | null>(null);
+    const [showAddForm, setShowAddForm] = useState(false);
 
     const fetchPeople = async () => {
         try {
@@ -80,12 +84,20 @@ export default function PeopleListPage() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                    <Users className="h-6 w-6" />
-                    Thành viên gia phả
-                </h1>
-                <p className="text-muted-foreground">{people.length} người trong gia phả</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                        <Users className="h-6 w-6" />
+                        Thành viên gia phả
+                    </h1>
+                    <p className="text-muted-foreground">{people.length} người trong gia phả</p>
+                </div>
+                {isMember && (
+                    <Button onClick={() => setShowAddForm(true)} className="gap-2">
+                        <UserPlus className="h-4 w-4" />
+                        Thêm thành viên
+                    </Button>
+                )}
             </div>
 
             {/* Filters */}
@@ -169,6 +181,21 @@ export default function PeopleListPage() {
                 onClose={() => setSelectedMember(null)}
                 refreshData={fetchPeople}
             />
+
+            {/* Add Member Modal */}
+            {showAddForm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-background rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto m-4">
+                        <MemberForm
+                            onSuccess={() => {
+                                setShowAddForm(false);
+                                fetchPeople();
+                            }}
+                            onCancel={() => setShowAddForm(false)}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
