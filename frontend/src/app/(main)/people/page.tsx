@@ -183,6 +183,7 @@ export default function PeopleListPage() {
                 isOpen={!!selectedMember}
                 onClose={() => setSelectedMember(null)}
                 refreshData={fetchPeople}
+                onUnlinkSuccess={fetchPeople}
                 onAddRelative={(handle, type) => {
                     const m = people.find(p => p.handle === handle);
                     if (m) {

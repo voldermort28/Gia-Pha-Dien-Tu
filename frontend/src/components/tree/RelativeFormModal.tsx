@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import type { TreeNode } from "@/lib/supabase-data"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
-// import MemberForm from "./MemberForm" // Will use in phase 2 if they choose "Add new"
+import MemberForm from "./MemberForm"
 
 interface RelativeFormModalProps {
     member: TreeNode | null
@@ -39,7 +39,7 @@ export default function RelativeFormModal({
             const { data: peopleData, error: peopleError } = await supabase
                 .from("people")
                 .select("*")
-                .in("handle", [member.handle, existingMember.handle])
+                .or(`handle.eq.${member.handle},handle.eq.${existingMember.handle}`)
 
             if (peopleError || !peopleData || peopleData.length !== 2) {
                 throw new Error("Không tìm thấy thông tin thành viên dự định liên kết.")
@@ -198,10 +198,45 @@ export default function RelativeFormModal({
                                     <ArrowLeft className="w-4 h-4" /> Quay lại tìm kiếm
                                 </button>
 
-                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
-                                    Tính năng <span className="font-semibold">Tạo mới trực tiếp</span> đang được hoàn thiện.
-                                    Tạm thời bạn có thể tạo thành viên mới từ giao diện chính, sau đó dùng công cụ
-                                    <span className="font-semibold"> Tìm kiếm có sẵn</span> để liên kết.
+                                {/* Inline creation form */}
+                                <div className="mt-4 border-t border-slate-100 pt-4">
+                                    <MemberForm
+                                        initialData={{
+                                            ...member, // just for some defaults but we'll clear it mostly
+                                            handle: `M_${Date.now()}`,
+                                            displayName: "",
+                                            gender: relativeType === 'spouse' ? (member.gender === 1 ? 2 : 1) : 1, // opposite gender for spouse default
+                                            generation: member.generation ? (relativeType === 'child' ? member.generation + 1 : member.generation) : "",
+                                            birthYear: undefined as any,
+                                            deathYear: undefined as any,
+                                            isLiving: true,
+                                            isPrivacyFiltered: false,
+                                            isPatrilineal: relativeType === 'child' ? true : false,
+                                        } as any}
+                                        onSuccess={async (newHandle) => {
+                                            // The MemberForm now saves the new person to DB.
+                                            // We just need to link them.
+                                            // Wait a tiny bit for DB replication if any
+                                            await new Promise(r => setTimeout(r, 500));
+
+                                            // Construct a fake tree node to pass to handleLinkExisting
+                                            const newFakeNode: TreeNode = {
+                                                handle: newHandle || `M_${Date.now()}`, // if MemberForm doesn't return handle, use what we generated or fallback
+                                                displayName: "Thành viên mới",
+                                                gender: 1,
+                                                isLiving: true,
+                                                isPatrilineal: true,
+                                                isPrivacyFiltered: false,
+                                                families: [],
+                                                parentFamilies: [],
+                                                children: []
+                                            };
+
+                                            // Actually, the handleLinkExisting fetches from DB anyway, so it just needs the handle!
+                                            await handleLinkExisting(newFakeNode);
+                                        }}
+                                        onCancel={() => setIsCreatingNew(false)}
+                                    />
                                 </div>
                             </div>
                         ) : (

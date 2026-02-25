@@ -10,6 +10,7 @@ import { useAuth } from "@/components/auth-provider"
 import { supabase } from "@/lib/supabase"
 import MemberForm from "./MemberForm"
 import { toast } from "sonner"
+import { Unlink } from "lucide-react"
 
 interface RelationPerson {
     handle: string
@@ -28,6 +29,8 @@ interface MemberDetailModalProps {
     isOpen: boolean
     onClose: () => void
     onAddRelative?: (parentId: string, type: 'child' | 'spouse') => void
+    onAddRelative?: (parentId: string, type: 'child' | 'spouse') => void
+    onUnlinkSuccess?: () => void
     onEditSuccess?: () => void
     refreshData?: () => void
     /** Start in add/edit mode directly */
@@ -39,6 +42,7 @@ export default function MemberDetailModal({
     isOpen,
     onClose,
     onAddRelative,
+    onUnlinkSuccess,
     onEditSuccess,
     refreshData,
     mode = 'view',
@@ -154,6 +158,74 @@ export default function MemberDetailModal({
             console.error("Error fetching relationships:", err)
         } finally {
             setLoadingRels(false)
+        }
+    }
+
+    const handleUnlink = async (targetHandle: string, relType: 'parent' | 'spouse' | 'child') => {
+        if (!member || !isAdmin) return
+        if (!window.confirm("Bạn có chắc chắn muốn hủy liên kết với thành viên này? (Thành viên sẽ không bị xóa khỏi hệ thống)")) return
+
+        setIsDeleting(true)
+        try {
+            const { data: mData } = await supabase.from("people").select("*").eq("handle", member.handle).single()
+            const { data: tData } = await supabase.from("people").select("*").eq("handle", targetHandle).single()
+
+            if (!mData || !tData) throw new Error("Không tìm thấy dữ liệu thành viên.")
+
+            if (relType === 'parent') {
+                // Member is child, target is parent. Remove target's family from member's parentFamilies.
+                // We need to find which family target belongs to that is in member's parentFamilies.
+                const sharedFamilies = (mData.parent_families || []).filter((f: string) => (tData.families || []).includes(f))
+                for (const fam of sharedFamilies) {
+                    const { data: fData } = await supabase.from("families").select("*").eq("handle", fam).single()
+                    if (fData && fData.children && fData.children.includes(member.handle)) {
+                        const newChildren = fData.children.filter((c: string) => c !== member.handle)
+                        await supabase.from("families").update({ children: newChildren }).eq("handle", fam)
+                    }
+                    const newParentFamilies = (mData.parent_families || []).filter((f: string) => f !== fam)
+                    await supabase.from("people").update({ parent_families: newParentFamilies }).eq("handle", member.handle)
+                }
+
+            } else if (relType === 'child') {
+                // Member is parent, target is child.
+                const sharedFamilies = (mData.families || []).filter((f: string) => (tData.parent_families || []).includes(f))
+                for (const fam of sharedFamilies) {
+                    const { data: fData } = await supabase.from("families").select("*").eq("handle", fam).single()
+                    if (fData && fData.children && fData.children.includes(targetHandle)) {
+                        const newChildren = fData.children.filter((c: string) => c !== targetHandle)
+                        await supabase.from("families").update({ children: newChildren }).eq("handle", fam)
+                    }
+                    const newParentFamilies = (tData.parent_families || []).filter((f: string) => f !== fam)
+                    await supabase.from("people").update({ parent_families: newParentFamilies }).eq("handle", targetHandle)
+                }
+
+            } else if (relType === 'spouse') {
+                // Remove spouse. Basically remove them from the family they share.
+                // Or if it's F_husband_wife, we might set the spouse's handle to null in the family record.
+                const sharedFamilies = (mData.families || []).filter((f: string) => (tData.families || []).includes(f))
+                for (const fam of sharedFamilies) {
+                    const { data: fData } = await supabase.from("families").select("*").eq("handle", fam).single()
+                    if (fData) {
+                        const updateData: any = {}
+                        if (fData.father_handle === targetHandle) updateData.father_handle = null
+                        if (fData.mother_handle === targetHandle) updateData.mother_handle = null
+                        if (Object.keys(updateData).length > 0) {
+                            await supabase.from("families").update(updateData).eq("handle", fam)
+                        }
+                    }
+                    const newFamiliesT = (tData.families || []).filter((f: string) => f !== fam)
+                    await supabase.from("people").update({ families: newFamiliesT }).eq("handle", targetHandle)
+                }
+            }
+
+            toast.success("Đã hủy liên kết thành công")
+            fetchRelationships(member)
+            if (refreshData) refreshData()
+            if (onUnlinkSuccess) onUnlinkSuccess()
+        } catch (error: any) {
+            toast.error(error.message || "Có lỗi xảy ra khi hủy liên kết")
+        } finally {
+            setIsDeleting(false)
         }
     }
 
@@ -305,7 +377,12 @@ export default function MemberDetailModal({
                                                     <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Bố / Mẹ</p>
                                                     <div className="space-y-2">
                                                         {relationships.parents.map(p => (
-                                                            <RelationRow key={p.handle} person={p} />
+                                                            <RelationRow
+                                                                key={p.handle}
+                                                                person={p}
+                                                                isEditing={isEditing}
+                                                                onUnlink={() => handleUnlink(p.handle, 'parent')}
+                                                            />
                                                         ))}
                                                     </div>
                                                 </div>
@@ -318,7 +395,12 @@ export default function MemberDetailModal({
                                                     <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Vợ / Chồng</p>
                                                     <div className="space-y-2">
                                                         {relationships.spouses.map(p => (
-                                                            <RelationRow key={p.handle} person={p} />
+                                                            <RelationRow
+                                                                key={p.handle}
+                                                                person={p}
+                                                                isEditing={isEditing}
+                                                                onUnlink={() => handleUnlink(p.handle, 'spouse')}
+                                                            />
                                                         ))}
                                                     </div>
                                                 </div>
@@ -331,7 +413,12 @@ export default function MemberDetailModal({
                                                     <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Con cái</p>
                                                     <div className="space-y-2">
                                                         {relationships.children.map(p => (
-                                                            <RelationRow key={p.handle} person={p} />
+                                                            <RelationRow
+                                                                key={p.handle}
+                                                                person={p}
+                                                                isEditing={isEditing}
+                                                                onUnlink={() => handleUnlink(p.handle, 'child')}
+                                                            />
                                                         ))}
                                                     </div>
                                                 </div>
@@ -405,17 +492,29 @@ export default function MemberDetailModal({
 }
 
 /* ===== Helper Component ===== */
-function RelationRow({ person }: { person: RelationPerson }) {
+function RelationRow({ person, isEditing, onUnlink }: { person: RelationPerson, isEditing?: boolean, onUnlink?: () => void }) {
     const bgColor = person.gender === 1
         ? "bg-blue-500"
         : "bg-rose-400"
 
     return (
-        <div className="flex items-center gap-3 py-1">
-            <div className={`w-8 h-8 rounded-full ${bgColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                {person.displayName.charAt(0)}
+        <div className="flex items-center justify-between gap-3 py-1 group">
+            <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full ${bgColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                    {person.displayName.charAt(0)}
+                </div>
+                <span className="text-sm font-medium text-stone-700">{person.displayName}</span>
             </div>
-            <span className="text-sm font-medium text-stone-700">{person.displayName}</span>
+
+            {isEditing && onUnlink && (
+                <button
+                    onClick={onUnlink}
+                    className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                    title="Hủy liên kết"
+                >
+                    <Unlink className="w-4 h-4" />
+                </button>
+            )}
         </div>
     )
 }
