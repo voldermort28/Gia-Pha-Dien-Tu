@@ -77,7 +77,12 @@ export default function MemberForm({
                 is_patrilineal: gender === 1,
             }
 
-            await upsertPerson(dbFields)
+            const result = await upsertPerson(dbFields)
+
+            if (!result.success) {
+                toast.error(result.error || "Đã xảy ra lỗi khi lưu Dữ liệu.")
+                return
+            }
 
             toast.success(initialData ? "Đã cập nhật thông tin thành công" : "Đã thêm thành viên mới")
             if (onSuccess) onSuccess()
