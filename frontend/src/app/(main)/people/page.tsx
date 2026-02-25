@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, Search, UserPlus } from 'lucide-react';
 import MemberDetailModal from '@/components/tree/MemberDetailModal';
+import RelativeFormModal from '@/components/tree/RelativeFormModal';
 import { useAuth } from '@/components/auth-provider';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,6 +44,9 @@ export default function PeopleListPage() {
     const [livingFilter, setLivingFilter] = useState<boolean | null>(null);
     const [selectedMember, setSelectedMember] = useState<Person | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
+    const [showRelativeForm, setShowRelativeForm] = useState(false);
+    const [relativeType, setRelativeType] = useState<'child' | 'spouse' | null>(null);
+    const [relativeTargetMember, setRelativeTargetMember] = useState<Person | null>(null);
 
     const fetchPeople = async () => {
         try {
@@ -179,6 +183,14 @@ export default function PeopleListPage() {
                 isOpen={!!selectedMember}
                 onClose={() => setSelectedMember(null)}
                 refreshData={fetchPeople}
+                onAddRelative={(handle, type) => {
+                    const m = people.find(p => p.handle === handle);
+                    if (m) {
+                        setRelativeTargetMember(m);
+                        setRelativeType(type);
+                        setShowRelativeForm(true);
+                    }
+                }}
             />
 
             {/* Add Member Modal */}
@@ -188,6 +200,22 @@ export default function PeopleListPage() {
                 onClose={() => setShowAddForm(false)}
                 refreshData={fetchPeople}
                 mode="add"
+            />
+
+            {/* Relative Link Modal */}
+            <RelativeFormModal
+                member={relativeTargetMember as any}
+                relativeType={relativeType}
+                isOpen={showRelativeForm}
+                onClose={() => {
+                    setShowRelativeForm(false);
+                    setRelativeType(null);
+                    setRelativeTargetMember(null);
+                }}
+                onSuccess={() => {
+                    fetchPeople();
+                }}
+                allPeople={people as any}
             />
         </div>
     );

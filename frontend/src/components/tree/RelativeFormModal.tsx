@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { TreeNode } from "@/lib/supabase-data"
 import { toast } from "sonner"
-import { linkRelativeAction } from "@/app/actions/families"
+import { supabase } from "@/lib/supabase"
 // import MemberForm from "./MemberForm" // Will use in phase 2 if they choose "Add new"
 
 interface RelativeFormModalProps {
@@ -36,7 +36,100 @@ export default function RelativeFormModal({
     const handleLinkExisting = async (existingMember: TreeNode) => {
         setIsSubmitting(true)
         try {
-            await linkRelativeAction(member.handle, existingMember.handle, relativeType)
+            const { data: peopleData, error: peopleError } = await supabase
+                .from("people")
+                .select("*")
+                .in("handle", [member.handle, existingMember.handle])
+
+            if (peopleError || !peopleData || peopleData.length !== 2) {
+                throw new Error("Không tìm thấy thông tin thành viên dự định liên kết.")
+            }
+
+            const m = peopleData.find(p => p.handle === member.handle)
+            const relative = peopleData.find(p => p.handle === existingMember.handle)
+
+            if (!m || !relative) throw new Error("Dữ liệu thành viên không hợp lệ.")
+
+            if (relativeType === 'spouse') {
+                const isMemberMale = m.gender === 1
+                const husbandId = isMemberMale ? m.handle : relative.handle
+                const wifeId = isMemberMale ? relative.handle : m.handle
+
+                const { data: existingFam } = await supabase
+                    .from("families")
+                    .select("handle")
+                    .eq("father_handle", husbandId)
+                    .eq("mother_handle", wifeId)
+                    .maybeSingle()
+
+                let familyHandle = existingFam?.handle
+
+                if (!familyHandle) {
+                    familyHandle = `F_${husbandId}_${wifeId}`
+                    const { error: insertErr } = await supabase.from("families").insert({
+                        handle: familyHandle,
+                        father_handle: husbandId,
+                        mother_handle: wifeId,
+                        children: []
+                    })
+                    if (insertErr) throw new Error("Lỗi khi tạo gia đình mới: " + insertErr.message)
+                }
+
+                const updatePersonFamilies = async (person: any) => {
+                    const currentFamilies = person.families || []
+                    if (!currentFamilies.includes(familyHandle)) {
+                        const { error } = await supabase.from("people").update({
+                            families: [...currentFamilies, familyHandle]
+                        }).eq("handle", person.handle)
+                        if (error) throw new Error(error.message)
+                    }
+                }
+
+                await updatePersonFamilies(m)
+                await updatePersonFamilies(relative)
+
+            } else if (relativeType === 'child') {
+                let familyHandle = m.families?.[0]
+
+                if (!familyHandle) {
+                    familyHandle = `F_single_${m.handle}`
+                    const isMale = m.gender === 1
+                    const { error: insertErr } = await supabase.from("families").insert({
+                        handle: familyHandle,
+                        father_handle: isMale ? m.handle : null,
+                        mother_handle: isMale ? null : m.handle,
+                        children: []
+                    })
+                    if (insertErr) throw new Error("Lỗi khi tạo gia đình: " + insertErr.message)
+
+                    const { error: upErr } = await supabase.from("people").update({
+                        families: [familyHandle]
+                    }).eq("handle", m.handle)
+                    if (upErr) throw new Error(upErr.message)
+                }
+
+                const { data: famData } = await supabase
+                    .from("families")
+                    .select("children")
+                    .eq("handle", familyHandle)
+                    .single()
+
+                const currentChildren = famData?.children || []
+                if (!currentChildren.includes(relative.handle)) {
+                    const { error: fupErr } = await supabase.from("families").update({
+                        children: [...currentChildren, relative.handle]
+                    }).eq("handle", familyHandle)
+                    if (fupErr) throw new Error(fupErr.message)
+                }
+
+                const currentParentFamilies = relative.parent_families || []
+                if (!currentParentFamilies.includes(familyHandle)) {
+                    const { error: pupErr } = await supabase.from("people").update({
+                        parent_families: [...currentParentFamilies, familyHandle]
+                    }).eq("handle", relative.handle)
+                    if (pupErr) throw new Error(pupErr.message)
+                }
+            }
 
             toast.success(`Đã thêm ${existingMember.displayName} làm ${relativeType === 'child' ? 'con' : 'vợ/chồng'} của ${member.displayName}!`)
             onSuccess()
