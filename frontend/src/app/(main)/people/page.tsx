@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, Search, UserPlus } from 'lucide-react';
 import MemberDetailModal from '@/components/tree/MemberDetailModal';
-import MemberForm from '@/components/tree/MemberForm';
 import { useAuth } from '@/components/auth-provider';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -183,22 +182,13 @@ export default function PeopleListPage() {
             />
 
             {/* Add Member Modal */}
-            {showAddForm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAddForm(false)}>
-                    <div
-                        className="relative bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4 p-6 border border-stone-200"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <MemberForm
-                            onSuccess={() => {
-                                setShowAddForm(false);
-                                fetchPeople();
-                            }}
-                            onCancel={() => setShowAddForm(false)}
-                        />
-                    </div>
-                </div>
-            )}
+            <MemberDetailModal
+                member={null}
+                isOpen={showAddForm}
+                onClose={() => setShowAddForm(false)}
+                refreshData={fetchPeople}
+                mode="add"
+            />
         </div>
     );
 }
