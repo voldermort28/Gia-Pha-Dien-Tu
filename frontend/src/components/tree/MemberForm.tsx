@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import type { TreeNode } from "@/lib/supabase-data"
-import { upsertPerson } from "@/app/actions/people"
+import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/components/auth-provider"
 import { toast } from "sonner"
 
@@ -75,12 +75,15 @@ export default function MemberForm({
                 death_year: deathYear === "" ? null : Number(deathYear),
                 is_living: isLiving,
                 is_patrilineal: gender === 1,
+                updated_at: new Date().toISOString(),
             }
 
-            const result = await upsertPerson(dbFields)
+            const { error } = await supabase
+                .from("people")
+                .upsert(dbFields)
 
-            if (!result.success) {
-                toast.error(result.error || "Đã xảy ra lỗi khi lưu Dữ liệu.")
+            if (error) {
+                toast.error(error.message || "Đã xảy ra lỗi khi lưu Dữ liệu.")
                 return
             }
 
