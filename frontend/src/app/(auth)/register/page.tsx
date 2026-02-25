@@ -93,8 +93,7 @@ function RegisterContent() {
                     id: authData.user.id,
                     email: data.email,
                     display_name: data.displayName,
-                    role: invite.role || 'member',
-                    status: 'active',
+                    role: invite.role || 'viewer'
                 });
             }
 
