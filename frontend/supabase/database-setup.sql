@@ -1,8 +1,9 @@
 -- ============================================================
--- 🌳 Gia Phả Điện Tử — Database Setup
+-- 🌳 Gia Phả Điện Tử — Database Setup (Complete V2)
 -- ============================================================
 -- Chạy file này trong: Supabase Dashboard → SQL Editor
 -- File này tạo toàn bộ cấu trúc database + dữ liệu mẫu demo
+-- Bao gồm cả xử lý Auth an toàn và đầy đủ các bảng sự kiện, thư viện
 -- ============================================================
 
 
@@ -10,7 +11,7 @@
 -- ║  1. CORE TABLES: people + families                      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
-CREATE TABLE IF NOT EXISTS people (
+CREATE TABLE IF NOT EXISTS public.people (
     handle TEXT PRIMARY KEY,
     gramps_id TEXT,
     gender INT NOT NULL DEFAULT 1,           -- 1=Nam, 2=Nữ
@@ -45,7 +46,7 @@ CREATE TABLE IF NOT EXISTS people (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS families (
+CREATE TABLE IF NOT EXISTS public.families (
     handle TEXT PRIMARY KEY,
     father_handle TEXT,
     mother_handle TEXT,
@@ -55,13 +56,13 @@ CREATE TABLE IF NOT EXISTS families (
 );
 
 -- Indexes
-CREATE INDEX IF NOT EXISTS idx_people_generation ON people (generation);
-CREATE INDEX IF NOT EXISTS idx_people_surname ON people (surname);
-CREATE INDEX IF NOT EXISTS idx_families_father ON families (father_handle);
-CREATE INDEX IF NOT EXISTS idx_families_mother ON families (mother_handle);
+CREATE INDEX IF NOT EXISTS idx_people_generation ON public.people (generation);
+CREATE INDEX IF NOT EXISTS idx_people_surname ON public.people (surname);
+CREATE INDEX IF NOT EXISTS idx_families_father ON public.families (father_handle);
+CREATE INDEX IF NOT EXISTS idx_families_mother ON public.families (mother_handle);
 
 -- Updated_at trigger
-CREATE OR REPLACE FUNCTION update_updated_at()
+CREATE OR REPLACE FUNCTION public.update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = now();
@@ -69,17 +70,20 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER people_updated_at BEFORE UPDATE ON people
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER families_updated_at BEFORE UPDATE ON families
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DROP TRIGGER IF EXISTS people_updated_at ON public.people;
+CREATE TRIGGER people_updated_at BEFORE UPDATE ON public.people
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+DROP TRIGGER IF EXISTS families_updated_at ON public.families;
+CREATE TRIGGER families_updated_at BEFORE UPDATE ON public.families
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  2. AUTH: profiles + auto-create trigger                ║
 -- ╚══════════════════════════════════════════════════════════╝
 
-CREATE TABLE IF NOT EXISTS profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT UNIQUE NOT NULL,
     display_name TEXT,
@@ -89,38 +93,82 @@ CREATE TABLE IF NOT EXISTS profiles (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Auto-create profile on signup
--- ⚠️ ĐỔI EMAIL ADMIN: thay 'your-admin@example.com' bằng email admin thật
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
+-- Cài đặt lại hàm Trigger an toàn đồng bộ tên
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
 DECLARE
     user_email TEXT;
 BEGIN
     user_email := COALESCE(NEW.email, NEW.raw_user_meta_data->>'email', '');
     IF user_email != '' THEN
-        INSERT INTO profiles (id, email, role)
+        INSERT INTO public.profiles (id, email, role, display_name)
         VALUES (
             NEW.id,
             user_email,
-            CASE WHEN user_email = 'your-admin@example.com' THEN 'admin' ELSE 'viewer' END
+            'viewer',
+            COALESCE(NEW.raw_user_meta_data->>'display_name', '')
         )
         ON CONFLICT (email) DO UPDATE SET id = NEW.id;
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  3. CONTRIBUTIONS (đề xuất chỉnh sửa)                  ║
+-- ║  3. SYSTEM TABLES: invite_links, events, media          ║
 -- ╚══════════════════════════════════════════════════════════╝
 
-CREATE TABLE IF NOT EXISTS contributions (
+CREATE TABLE IF NOT EXISTS public.invite_links (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code TEXT UNIQUE NOT NULL,
+    role TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'viewer')),
+    max_uses INT,
+    used_count INT DEFAULT 0,
+    expires_at TIMESTAMPTZ,
+    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    description TEXT,
+    start_at TIMESTAMPTZ NOT NULL,
+    end_at TIMESTAMPTZ,
+    location TEXT,
+    type TEXT NOT NULL DEFAULT 'OTHER',
+    is_recurring BOOLEAN DEFAULT false,
+    creator_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.media (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    file_name TEXT NOT NULL,
+    mime_type TEXT,
+    file_size BIGINT,
+    title TEXT,
+    description TEXT,
+    state TEXT NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING', 'PUBLISHED', 'REJECTED')),
+    uploader_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  4. INTERACTION TABLES: contributions, comments         ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+CREATE TABLE IF NOT EXISTS public.contributions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     author_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     author_email TEXT,
@@ -138,15 +186,7 @@ CREATE TABLE IF NOT EXISTS contributions (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_contributions_status ON contributions(status);
-CREATE INDEX IF NOT EXISTS idx_contributions_person ON contributions(person_handle);
-
-
--- ╔══════════════════════════════════════════════════════════╗
--- ║  4. COMMENTS (bình luận)                                ║
--- ╚══════════════════════════════════════════════════════════╝
-
-CREATE TABLE IF NOT EXISTS comments (
+CREATE TABLE IF NOT EXISTS public.comments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     author_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     author_email TEXT,
@@ -156,98 +196,94 @@ CREATE TABLE IF NOT EXISTS comments (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_comments_person ON comments(person_handle);
+CREATE INDEX IF NOT EXISTS idx_contributions_status ON public.contributions(status);
+CREATE INDEX IF NOT EXISTS idx_contributions_person ON public.contributions(person_handle);
+CREATE INDEX IF NOT EXISTS idx_comments_person ON public.comments(person_handle);
 
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  5. ROW LEVEL SECURITY (RLS)                            ║
 -- ╚══════════════════════════════════════════════════════════╝
 
--- People & Families: public read, authenticated write, admin delete
-ALTER TABLE people ENABLE ROW LEVEL SECURITY;
-ALTER TABLE families ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.people ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.families ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invite_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.media ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.contributions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "anyone can read people" ON people FOR SELECT USING (true);
-CREATE POLICY "anyone can read families" ON families FOR SELECT USING (true);
-CREATE POLICY "authenticated can update people" ON people
-    FOR UPDATE USING (auth.role() = 'authenticated');
-CREATE POLICY "authenticated can insert people" ON people
-    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "admin can delete people" ON people
-    FOR DELETE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
-CREATE POLICY "authenticated can update families" ON families
-    FOR UPDATE USING (auth.role() = 'authenticated');
-CREATE POLICY "authenticated can insert families" ON families
-    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "admin can delete families" ON families
-    FOR DELETE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+-- People & Families
+CREATE POLICY "anyone can read people" ON public.people FOR SELECT USING (true);
+CREATE POLICY "anyone can read families" ON public.families FOR SELECT USING (true);
+CREATE POLICY "authenticated can update people" ON public.people FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "authenticated can insert people" ON public.people FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "admin can delete people" ON public.people FOR DELETE USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "authenticated can update families" ON public.families FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "authenticated can insert families" ON public.families FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "admin can delete families" ON public.families FOR DELETE USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
--- Profiles: public read, update own or admin
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "anyone can read profiles" ON profiles FOR SELECT USING (true);
-CREATE POLICY "users can insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
-CREATE POLICY "users or admin can update profile" ON profiles
-    FOR UPDATE USING (auth.uid() = id OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+-- Profiles
+CREATE POLICY "anyone can read profiles" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "users or admin can update profile" ON public.profiles FOR UPDATE USING (auth.uid() = id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
--- Contributions: public read, user insert own, admin update
-ALTER TABLE contributions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "anyone can read contributions" ON contributions FOR SELECT USING (true);
-CREATE POLICY "users can insert contributions" ON contributions FOR INSERT WITH CHECK (auth.uid() = author_id);
-CREATE POLICY "admin can update contributions" ON contributions
-    FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+-- System Tables
+CREATE POLICY "anyone can read invite_links" ON public.invite_links FOR SELECT USING (true);
+CREATE POLICY "admin can manage invite_links" ON public.invite_links FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
--- Comments: public read, user insert own, owner/admin delete
-ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "anyone can read comments" ON comments FOR SELECT USING (true);
-CREATE POLICY "users can insert comments" ON comments FOR INSERT WITH CHECK (auth.uid() = author_id);
-CREATE POLICY "owner or admin can delete comments" ON comments
-    FOR DELETE USING (
-        author_id = auth.uid() OR
-        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
-    );
+CREATE POLICY "anyone can read events" ON public.events FOR SELECT USING (true);
+CREATE POLICY "authenticated can insert events" ON public.events FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "admin can manage events" ON public.events FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+
+CREATE POLICY "anyone can read media" ON public.media FOR SELECT USING (true);
+CREATE POLICY "authenticated can insert media" ON public.media FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "admin can manage media" ON public.media FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+
+-- Contributions & Comments
+CREATE POLICY "anyone can read contributions" ON public.contributions FOR SELECT USING (true);
+CREATE POLICY "users can insert contributions" ON public.contributions FOR INSERT WITH CHECK (auth.uid() = author_id);
+CREATE POLICY "admin can update contributions" ON public.contributions FOR UPDATE USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+
+CREATE POLICY "anyone can read comments" ON public.comments FOR SELECT USING (true);
+CREATE POLICY "users can insert comments" ON public.comments FOR INSERT WITH CHECK (auth.uid() = author_id);
+CREATE POLICY "owner or admin can delete comments" ON public.comments FOR DELETE USING (author_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
 -- Constraints
-ALTER TABLE comments ADD CONSTRAINT comments_content_length CHECK (char_length(content) BETWEEN 1 AND 2000);
-ALTER TABLE contributions ADD CONSTRAINT contributions_value_length CHECK (char_length(new_value) <= 5000);
+ALTER TABLE public.comments ADD CONSTRAINT comments_content_length CHECK (char_length(content) BETWEEN 1 AND 2000);
+ALTER TABLE public.contributions ADD CONSTRAINT contributions_value_length CHECK (char_length(new_value) <= 5000);
 
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  6. DỮ LIỆU MẪU DEMO (xóa phần này nếu dùng dữ liệu thật)║
+-- ║  6. INITIAL DATA & DEMO (Dữ liệu mẫu)                   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
--- Dòng họ mẫu: Họ Nguyễn Văn — 4 thế hệ, 15 thành viên
--- Cấu trúc:
---   Đời 1: Nguyễn Văn An (tổ tiên)
---   Đời 2: Bình, Cường, Dũng (3 con trai)
---   Đời 3: Bình → Hải, Hùng | Cường → Khoa, Khánh | Dũng → Long
---   Đời 4: Hải → Minh, Nam | Khoa → Phúc
+-- Admin & Default Invites
+INSERT INTO public.invite_links (code, role, max_uses) VALUES ('VUXOANVU', 'viewer', 100) ON CONFLICT DO NOTHING;
+INSERT INTO public.invite_links (code, role, max_uses) VALUES ('ADMINVIP', 'admin', 10) ON CONFLICT DO NOTHING;
 
--- People
-INSERT INTO people (handle, display_name, gender, generation, birth_year, death_year, is_living, is_patrilineal, families, parent_families) VALUES
--- Đời 1
+-- Demo People
+INSERT INTO public.people (handle, display_name, gender, generation, birth_year, death_year, is_living, is_patrilineal, families, parent_families) VALUES
 ('P001', 'Nguyễn Văn An',    1, 1, 1920, 1995, false, true, '{"F001"}', '{}'),
--- Đời 2
 ('P002', 'Nguyễn Văn Bình',  1, 2, 1945, NULL, true,  true, '{"F002"}', '{"F001"}'),
 ('P003', 'Nguyễn Văn Cường', 1, 2, 1948, NULL, true,  true, '{"F003"}', '{"F001"}'),
 ('P004', 'Nguyễn Văn Dũng',  1, 2, 1951, 2020, false, true, '{"F004"}', '{"F001"}'),
--- Đời 3
 ('P005', 'Nguyễn Văn Hải',   1, 3, 1970, NULL, true,  true, '{"F005"}', '{"F002"}'),
 ('P006', 'Nguyễn Văn Hùng',  1, 3, 1973, NULL, true,  true, '{}',       '{"F002"}'),
 ('P007', 'Nguyễn Văn Khoa',  1, 3, 1975, NULL, true,  true, '{"F006"}', '{"F003"}'),
 ('P008', 'Nguyễn Văn Khánh', 1, 3, 1978, NULL, true,  true, '{}',       '{"F003"}'),
 ('P009', 'Nguyễn Văn Long',  1, 3, 1980, NULL, true,  true, '{}',       '{"F004"}'),
--- Đời 4
 ('P010', 'Nguyễn Văn Minh',  1, 4, 1995, NULL, true,  true, '{}',       '{"F005"}'),
 ('P011', 'Nguyễn Văn Nam',   1, 4, 1998, NULL, true,  true, '{}',       '{"F005"}'),
 ('P012', 'Nguyễn Văn Phúc',  1, 4, 2000, NULL, true,  true, '{}',       '{"F006"}'),
--- Vợ (ngoại tộc)
 ('P013', 'Trần Thị Lan',     2, 1, 1925, 2000, false, false, '{}', '{}'),
 ('P014', 'Lê Thị Mai',       2, 2, 1948, NULL, true,  false, '{}', '{}'),
 ('P015', 'Phạm Thị Hoa',     2, 3, 1972, NULL, true,  false, '{}', '{}')
 ON CONFLICT (handle) DO NOTHING;
 
--- Families
-INSERT INTO families (handle, father_handle, mother_handle, children) VALUES
+-- Demo Families
+INSERT INTO public.families (handle, father_handle, mother_handle, children) VALUES
 ('F001', 'P001', 'P013', '{"P002","P003","P004"}'),
 ('F002', 'P002', 'P014', '{"P005","P006"}'),
 ('F003', 'P003', NULL,   '{"P007","P008"}'),
@@ -258,5 +294,5 @@ ON CONFLICT (handle) DO NOTHING;
 
 
 -- ============================================================
-SELECT '✅ Database setup complete! Demo data loaded.' AS status;
+SELECT '✅ Database setup complete! V2 Structure and Demo data loaded.' AS status;
 -- ============================================================
