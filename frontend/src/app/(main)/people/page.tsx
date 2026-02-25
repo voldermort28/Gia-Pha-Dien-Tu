@@ -184,8 +184,11 @@ export default function PeopleListPage() {
 
             {/* Add Member Modal */}
             {showAddForm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                    <div className="bg-background rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAddForm(false)}>
+                    <div
+                        className="relative bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4 p-6 border border-stone-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <MemberForm
                             onSuccess={() => {
                                 setShowAddForm(false);
