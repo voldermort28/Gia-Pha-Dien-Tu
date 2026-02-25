@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, User, Heart, Image, FileText, History, Lock, Phone, MapPin, Briefcase, GraduationCap, Tag, MessageCircle } from 'lucide-react';
+import { ArrowLeft, User, Heart, Image, FileText, History, Lock, Phone, MapPin, Briefcase, GraduationCap, Tag, MessageCircle, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,14 +12,18 @@ import { Separator } from '@/components/ui/separator';
 import { zodiacYear } from '@/lib/genealogy-types';
 import type { PersonDetail } from '@/lib/genealogy-types';
 import { CommentSection } from '@/components/comment-section';
+import { useAuth } from '@/components/auth-provider';
+import MemberDetailModal from '@/components/tree/MemberDetailModal';
 
 
 export default function PersonProfilePage() {
     const params = useParams();
     const router = useRouter();
     const handle = params.handle as string;
+    const { isAdmin, isMember } = useAuth();
     const [person, setPerson] = useState<PersonDetail | null>(null);
     const [loading, setLoading] = useState(true);
+    const [showEditModal, setShowEditModal] = useState(false);
 
     useEffect(() => {
         const fetchPerson = async () => {
@@ -107,6 +111,17 @@ export default function PersonProfilePage() {
                         </p>
                     </div>
                 </div>
+                {(isAdmin || isMember) && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowEditModal(true)}
+                        className="gap-2"
+                    >
+                        <Edit2 className="h-4 w-4" />
+                        Chỉnh sửa
+                    </Button>
+                )}
             </div>
 
             {/* Privacy notice */}
@@ -343,6 +358,65 @@ export default function PersonProfilePage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            {/* Edit Modal */}
+            {person && (
+                <MemberDetailModal
+                    member={{
+                        handle: person.handle,
+                        displayName: person.displayName,
+                        gender: person.gender,
+                        generation: person.generation,
+                        birthYear: person.birthYear,
+                        deathYear: person.deathYear,
+                        isLiving: person.isLiving,
+                        isPrivacyFiltered: person.isPrivacyFiltered,
+                        isPatrilineal: person.isPatrilineal,
+                        families: person.families,
+                        parentFamilies: person.parentFamilies,
+                    } as any}
+                    isOpen={showEditModal}
+                    onClose={() => setShowEditModal(false)}
+                    onEditSuccess={() => {
+                        // Re-fetch person data
+                        setLoading(true);
+                        const refetch = async () => {
+                            const { supabase } = await import('@/lib/supabase');
+                            const { data } = await supabase
+                                .from('people')
+                                .select('*')
+                                .eq('handle', handle)
+                                .single();
+                            if (data) {
+                                const row = data as Record<string, unknown>;
+                                setPerson({
+                                    handle: row.handle as string,
+                                    displayName: row.display_name as string,
+                                    gender: row.gender as number,
+                                    birthYear: row.birth_year as number | undefined,
+                                    deathYear: row.death_year as number | undefined,
+                                    generation: row.generation as number,
+                                    isLiving: row.is_living as boolean,
+                                    isPrivacyFiltered: row.is_privacy_filtered as boolean,
+                                    isPatrilineal: row.is_patrilineal as boolean,
+                                    families: (row.families as string[]) || [],
+                                    parentFamilies: (row.parent_families as string[]) || [],
+                                    phone: row.phone as string | undefined,
+                                    email: row.email as string | undefined,
+                                    currentAddress: row.current_address as string | undefined,
+                                    hometown: row.hometown as string | undefined,
+                                    occupation: row.occupation as string | undefined,
+                                    education: row.education as string | undefined,
+                                    notes: row.notes as string | undefined,
+                                } as PersonDetail);
+                            }
+                            setLoading(false);
+                        };
+                        refetch();
+                    }}
+                    refreshData={() => { }}
+                />
+            )}
         </div>
     );
 }

@@ -341,7 +341,7 @@ export default function MemberDetailModal({
                                 )}
 
                                 {/* Add Relative Buttons */}
-                                {(isAdmin || isMember) && member && (
+                                {member && (
                                     <div className="flex flex-wrap gap-3">
                                         <Button
                                             variant="outline"
