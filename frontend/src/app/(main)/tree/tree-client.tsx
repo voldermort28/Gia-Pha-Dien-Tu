@@ -635,6 +635,8 @@ export default function TreeViewPage() {
     }, [layout, loading]); // eslint-disable-line
 
     // === Mouse handlers ===
+    const rafRef = useRef<number | null>(null);
+
     const handleMouseDown = (e: React.MouseEvent) => {
         if (e.button !== 0) return;
         setIsDragging(true);
@@ -642,9 +644,12 @@ export default function TreeViewPage() {
     };
     const handleMouseMove = (e: React.MouseEvent) => {
         if (!isDragging) return;
+        if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
         const dx = e.clientX - dragRef.current.startX;
         const dy = e.clientY - dragRef.current.startY;
-        setTransform(t => ({ ...t, x: dragRef.current.startTx + dx, y: dragRef.current.startTy + dy }));
+        rafRef.current = requestAnimationFrame(() => {
+            setTransform(t => ({ ...t, x: dragRef.current.startTx + dx, y: dragRef.current.startTy + dy }));
+        });
     };
     const handleMouseUp = () => setIsDragging(false);
 
@@ -689,12 +694,15 @@ export default function TreeViewPage() {
         };
 
         const onTouchMove = (e: TouchEvent) => {
-            e.preventDefault();
+            if (e.cancelable) e.preventDefault();
             if (e.touches.length === 1 && touching) {
                 const t = e.touches[0];
                 const dx = t.clientX - dragRef.current.startX;
                 const dy = t.clientY - dragRef.current.startY;
-                setTransform(prev => ({ ...prev, x: dragRef.current.startTx + dx, y: dragRef.current.startTy + dy }));
+                if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+                rafRef.current = requestAnimationFrame(() => {
+                    setTransform(prev => ({ ...prev, x: dragRef.current.startTx + dx, y: dragRef.current.startTy + dy }));
+                });
             } else if (e.touches.length === 2) {
                 const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
                 const ratio = dist / pinchRef.current.initialDist;
@@ -706,9 +714,12 @@ export default function TreeViewPage() {
                 const mx = midX - rect.left;
                 const my = midY - rect.top;
 
-                setTransform(prev => {
-                    const r = newScale / prev.scale;
-                    return { scale: newScale, x: mx - (mx - prev.x) * r, y: my - (my - prev.y) * r };
+                if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+                rafRef.current = requestAnimationFrame(() => {
+                    setTransform(prev => {
+                        const r = newScale / prev.scale;
+                        return { scale: newScale, x: mx - (mx - prev.x) * r, y: my - (my - prev.y) * r };
+                    });
                 });
             }
             lastTouches = Array.from(e.touches);
