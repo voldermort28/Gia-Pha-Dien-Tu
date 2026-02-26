@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
     AlertCircle,
@@ -22,6 +22,7 @@ import type { TreeNode } from "@/lib/supabase-data"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/components/auth-provider"
 import { toast } from "sonner"
+import { toSlug } from "@/lib/utils"
 
 interface MemberFormProps {
     initialData?: TreeNode
@@ -48,6 +49,13 @@ export default function MemberForm({
     const [birthYear, setBirthYear] = useState<number | "">(initialData?.birthYear || "")
     const [deathYear, setDeathYear] = useState<number | "">(initialData?.deathYear || "")
     const [isLiving, setIsLiving] = useState<boolean>(initialData?.isLiving ?? true)
+
+    // Auto-generate handle for NEW members
+    useEffect(() => {
+        if (!initialData?.handle && displayName) {
+            setHandle(toSlug(displayName))
+        }
+    }, [displayName, initialData?.handle])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -128,7 +136,7 @@ export default function MemberForm({
                             value={handle}
                             onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
                             placeholder="VD: quang-minh-huy"
-                            disabled={!!initialData} // Không cho thay đổi handle nếu đang edit
+                            disabled={!!initialData?.handle} // Không cho thay đổi handle nếu đang edit
                             required
                         />
                         <p className="text-xs text-stone-500">Mã duy nhất, dùng để tạo đường dẫn.</p>
