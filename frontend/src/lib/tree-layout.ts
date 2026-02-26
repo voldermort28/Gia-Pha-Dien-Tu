@@ -65,7 +65,7 @@ export interface LayoutResult {
 
 // Sizing
 export const CARD_W = 180;
-export const CARD_H = 80;
+export const CARD_H = 88;
 export const H_SPACE = 24;
 export const V_SPACE = 80;
 export const COUPLE_GAP = 8;
