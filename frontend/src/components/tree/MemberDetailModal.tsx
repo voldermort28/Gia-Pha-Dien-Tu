@@ -89,36 +89,42 @@ export default function MemberDetailModal({
             const spouses: RelationPerson[] = []
             const children: RelationPerson[] = []
 
-            if (m.parentFamilies && m.parentFamilies.length > 0) {
-                const { data: parentFams } = await supabase.from("families").select("father_handle, mother_handle").in("handle", m.parentFamilies)
-                if (parentFams) {
-                    const parentHandles = parentFams.flatMap(f => [f.father_handle, f.mother_handle]).filter((h): h is string => !!h && h !== m.handle)
-                    if (parentHandles.length > 0) {
-                        const { data: parentPeople } = await supabase.from("people").select("handle, display_name, gender").in("handle", parentHandles)
-                        if (parentPeople) parents.push(...parentPeople.map(p => ({ handle: p.handle, displayName: p.display_name, gender: p.gender })))
-                    }
+            // Find parent families where the member is explicitly a child
+            const { data: parentFams } = await supabase.from("families")
+                .select("father_handle, mother_handle")
+                .contains("children", [m.handle])
+
+            if (parentFams && parentFams.length > 0) {
+                const parentHandles = parentFams.flatMap(f => [f.father_handle, f.mother_handle]).filter((h): h is string => !!h && h !== m.handle)
+                if (parentHandles.length > 0) {
+                    const { data: parentPeople } = await supabase.from("people").select("handle, display_name, gender").in("handle", parentHandles)
+                    if (parentPeople) parents.push(...parentPeople.map(p => ({ handle: p.handle, displayName: p.display_name, gender: p.gender })))
                 }
             }
 
-            if (m.families && m.families.length > 0) {
-                const { data: ownFams } = await supabase.from("families").select("father_handle, mother_handle, children").in("handle", m.families)
-                if (ownFams) {
-                    const spouseHandles = ownFams.map(f => m.gender === 1 ? f.mother_handle : f.father_handle).filter((h): h is string => !!h && h !== m.handle)
-                    const childHandles = ownFams.flatMap(f => (f.children as string[]) || []).filter((h): h is string => !!h)
-                    const allHandles = [...new Set([...spouseHandles, ...childHandles])]
-                    if (allHandles.length > 0) {
-                        const { data: relPeople } = await supabase.from("people").select("handle, display_name, gender").in("handle", allHandles)
-                        if (relPeople) {
-                            const personMap = new Map(relPeople.map(p => [p.handle, p]))
-                            for (const sh of spouseHandles) {
-                                const p = personMap.get(sh)
-                                if (p) spouses.push({ handle: p.handle, displayName: p.display_name, gender: p.gender })
+            // Find own families where the member is father or mother
+            const { data: ownFams } = await supabase.from("families")
+                .select("father_handle, mother_handle, children")
+                .or(`father_handle.eq.${m.handle},mother_handle.eq.${m.handle}`)
+
+            if (ownFams && ownFams.length > 0) {
+                const spouseHandles = ownFams.map(f => f.father_handle === m.handle ? f.mother_handle : f.father_handle).filter((h): h is string => !!h && h !== m.handle)
+                const childHandles = ownFams.flatMap(f => (f.children as string[]) || []).filter((h): h is string => !!h)
+                const allHandles = [...new Set([...spouseHandles, ...childHandles])]
+                if (allHandles.length > 0) {
+                    const { data: relPeople } = await supabase.from("people").select("handle, display_name, gender").in("handle", allHandles)
+                    if (relPeople) {
+                        const personMap = new Map(relPeople.map(p => [p.handle, p]))
+                        for (const sh of spouseHandles) {
+                            const p = personMap.get(sh)
+                            if (p && !spouses.find(s => s.handle === p.handle)) {
+                                spouses.push({ handle: p.handle, displayName: p.display_name, gender: p.gender })
                             }
-                            for (const ch of childHandles) {
-                                const p = personMap.get(ch)
-                                if (p && !children.find(c => c.handle === p.handle)) {
-                                    children.push({ handle: p.handle, displayName: p.display_name, gender: p.gender })
-                                }
+                        }
+                        for (const ch of childHandles) {
+                            const p = personMap.get(ch)
+                            if (p && !children.find(c => c.handle === p.handle)) {
+                                children.push({ handle: p.handle, displayName: p.display_name, gender: p.gender })
                             }
                         }
                     }
@@ -258,10 +264,10 @@ export default function MemberDetailModal({
                         {isEditing && !isAddMode && (
                             <button
                                 onClick={() => setIsEditing(false)}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-stone-100/80 backdrop-blur-md text-stone-700 rounded-full hover:bg-stone-200 font-semibold text-sm shadow-sm border border-stone-200/50 transition-colors"
+                                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-stone-100/80 backdrop-blur-md text-stone-700 rounded-full hover:bg-stone-200 font-semibold text-sm shadow-sm border border-stone-200/50 transition-colors"
                             >
                                 <X className="size-4" />
-                                <span className="hidden sm:inline">Hủy sửa</span>
+                                <span>Hủy sửa</span>
                             </button>
                         )}
                         {!isEditing && !isAddMode && (isAdmin || isMember) && (
@@ -269,18 +275,18 @@ export default function MemberDetailModal({
                                 {member && (
                                     <button
                                         onClick={() => { onClose(); router.push(`/people/${member.handle}`) }}
-                                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-50/80 backdrop-blur-md text-blue-700 rounded-full hover:bg-blue-100 font-semibold text-sm shadow-sm border border-blue-200/50 transition-colors"
+                                        className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-blue-50/80 backdrop-blur-md text-blue-700 rounded-full hover:bg-blue-100 font-semibold text-sm shadow-sm border border-blue-200/50 transition-colors"
                                     >
                                         <ExternalLink className="size-4" />
-                                        <span className="hidden sm:inline">Trang hồ sơ</span>
+                                        <span>Trang hồ sơ</span>
                                     </button>
                                 )}
                                 <button
                                     onClick={() => setIsEditing(true)}
-                                    className="flex items-center gap-1.5 px-4 py-2 bg-amber-100/80 backdrop-blur-md text-amber-800 rounded-full hover:bg-amber-200 font-semibold text-sm shadow-sm border border-amber-200/50 transition-colors"
+                                    className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-amber-100/80 backdrop-blur-md text-amber-800 rounded-full hover:bg-amber-200 font-semibold text-sm shadow-sm border border-amber-200/50 transition-colors"
                                 >
                                     <Edit2 className="size-4" />
-                                    <span className="hidden sm:inline">Chỉnh sửa</span>
+                                    <span>Chỉnh sửa</span>
                                 </button>
                             </>
                         )}
@@ -409,14 +415,36 @@ export default function MemberDetailModal({
 
                                             {/* Family Container */}
                                             <motion.section variants={itemVariants}>
-                                                <h2 className="text-base sm:text-lg font-bold text-stone-800 mb-4 flex items-center gap-2">
-                                                    <Users className="size-5 text-amber-600" />
-                                                    Gia đình
-                                                </h2>
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <h2 className="text-base sm:text-lg font-bold text-stone-800 flex items-center gap-2">
+                                                        <Users className="size-5 text-amber-600" />
+                                                        Gia đình
+                                                    </h2>
+                                                    {isAdmin && member && (
+                                                        <div className="flex gap-2">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 px-3 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 border-dashed rounded-full"
+                                                                onClick={() => onAddRelative ? onAddRelative(member.handle, 'child') : null}
+                                                            >
+                                                                <UserPlus className="w-3.5 h-3.5 mr-1" /> Thêm con
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 px-3 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 border-dashed rounded-full"
+                                                                onClick={() => onAddRelative ? onAddRelative(member.handle, 'spouse') : null}
+                                                            >
+                                                                <UserPlus className="w-3.5 h-3.5 mr-1" /> Thêm vợ/chồng
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <div className="bg-white/80 backdrop-blur-sm p-4 sm:p-6 rounded-2xl border border-stone-200/60 shadow-sm relative z-0">
                                                     {loadingRels ? (
                                                         <div className="p-8 text-center text-stone-400">Đang tải biểu đồ gia đình...</div>
-                                                    ) : (relationships.parents.length === 0 && relationships.spouses.length === 0 && relationships.children.length === 0 && !isAdmin) ? (
+                                                    ) : (relationships.parents.length === 0 && relationships.spouses.length === 0 && relationships.children.length === 0) ? (
                                                         <div className="p-4 text-center text-stone-500 italic">Chưa có thông tin người thân.</div>
                                                     ) : (
                                                         <div className="space-y-6">
@@ -450,28 +478,6 @@ export default function MemberDetailModal({
                                                                             <RelationRow key={p.handle} person={p} onUnlink={isAdmin ? () => handleUnlink(p.handle, 'child') : undefined} />
                                                                         ))}
                                                                     </div>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Add Relative Buttons placed nicely under the list like in giapha-os */}
-                                                            {isAdmin && member && (
-                                                                <div className="flex flex-wrap gap-3 pt-6 border-t border-stone-100 mt-6">
-                                                                    <Button
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        className="h-9 px-4 text-xs bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100 hover:text-stone-900 border-dashed rounded-xl rounded-full font-semibold"
-                                                                        onClick={() => onAddRelative ? onAddRelative(member.handle, 'child') : null}
-                                                                    >
-                                                                        + Thêm Con
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        className="h-9 px-4 text-xs bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100 hover:text-stone-900 border-dashed rounded-xl rounded-full font-semibold"
-                                                                        onClick={() => onAddRelative ? onAddRelative(member.handle, 'spouse') : null}
-                                                                    >
-                                                                        + Thêm Vợ/Chồng
-                                                                    </Button>
                                                                 </div>
                                                             )}
                                                         </div>
