@@ -486,6 +486,26 @@ export function computeLayout(people: TreeNode[], families: TreeFamily[]): Layou
     const personMap = new Map(people.map(p => [p.handle, p]));
     const familyMap = new Map(uniqueFamilies.map(f => [f.handle, f]));
 
+    // ═══ Pre-sort: Sort all children strictly by birth year (oldest left, youngest right) ═══
+    for (const fam of uniqueFamilies) {
+        fam.children.sort((a, b) => {
+            const pA = personMap.get(a);
+            const pB = personMap.get(b);
+            if (!pA || !pB) return 0;
+
+            // If birth year is unknown, put them at the end (using 9999)
+            const yearA = pA.birthYear ?? 9999;
+            const yearB = pB.birthYear ?? 9999;
+
+            if (yearA !== yearB) {
+                return yearA - yearB;
+            }
+
+            // Fallback for twins or undefined birth years: stable sort by handle/ID
+            return a.localeCompare(b);
+        });
+    }
+
     const gens = assignGenerations(people, uniqueFamilies);
 
     // Find root families (parents NOT children of any family)
