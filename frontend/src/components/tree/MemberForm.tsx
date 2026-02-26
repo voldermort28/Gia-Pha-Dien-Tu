@@ -82,7 +82,7 @@ export default function MemberForm({
                 birth_year: birthYear === "" ? null : Number(birthYear),
                 death_year: (isLiving || deathYear === "") ? null : Number(deathYear),
                 is_living: isLiving,
-                is_patrilineal: gender === 1,
+                is_patrilineal: initialData?.isPatrilineal ?? (gender === 1),
                 updated_at: new Date().toISOString(),
             }
 

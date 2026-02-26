@@ -22,7 +22,7 @@ export interface BookPerson {
     motherName?: string;
     spouseName?: string;
     spouseYears?: string;
-    spouseNote?: string; // "(Ngoại tộc)"
+    spouseNote?: string; // "(Dâu/rể)"
     children: { name: string; years: string; note?: string }[];
     childIndex?: number; // thứ tự con trong gia đình (1, 2, 3...)
 }
@@ -169,7 +169,7 @@ export function generateBookData(
                 if (spouse) {
                     spouseName = spouse.displayName;
                     spouseYears = formatYears(spouse.birthYear, spouse.deathYear, spouse.isLiving);
-                    if (!spouse.isPatrilineal) spouseNote = 'Ngoại tộc';
+                    if (!spouse.isPatrilineal) spouseNote = 'Dâu/rể';
                 }
             }
 
@@ -181,7 +181,7 @@ export function generateBookData(
                     children.push({
                         name: child.displayName,
                         years: formatYears(child.birthYear, child.deathYear, child.isLiving),
-                        note: !child.isPatrilineal ? 'Ngoại tộc' : undefined,
+                        note: !child.isPatrilineal ? 'Dâu/rể' : undefined,
                     });
                 }
             }
