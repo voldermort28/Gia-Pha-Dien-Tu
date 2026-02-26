@@ -558,9 +558,8 @@ export default function TreeViewPage() {
         let pp = '';
         let cp = '';
         const vc: PositionedCouple[] = [];
-        // Only render connections where at least one endpoint is visible
+        // Only render connections whose bounding box intersects the visible area
         for (const c of layout.connections) {
-            // Check if any endpoint is near visible area
             const vw = viewportRef.current?.clientWidth ?? 1200;
             const vh = viewportRef.current?.clientHeight ?? 900;
             const { x: tx, y: ty, scale } = transform;
@@ -568,9 +567,14 @@ export default function TreeViewPage() {
             const top = (-ty / scale) - CULL_PAD;
             const right = ((vw - tx) / scale) + CULL_PAD;
             const bottom = ((vh - ty) / scale) + CULL_PAD;
-            const inView = (x: number, y: number) =>
-                x >= left && x <= right && y >= top && y <= bottom;
-            if (!inView(c.fromX, c.fromY) && !inView(c.toX, c.toY)) continue;
+
+            const minX = Math.min(c.fromX, c.toX);
+            const maxX = Math.max(c.fromX, c.toX);
+            const minY = Math.min(c.fromY, c.toY);
+            const maxY = Math.max(c.fromY, c.toY);
+
+            // Bounding box intersection
+            if (maxX < left || minX > right || maxY < top || minY > bottom) continue;
 
             if (c.type === 'couple') {
                 cp += `M${c.fromX},${c.fromY}L${c.toX},${c.toY}`;
