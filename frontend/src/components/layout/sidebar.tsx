@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useAuth } from '@/components/auth-provider';
 
-const navItems = [
+export const navItems = [
     { href: '/', label: 'Trang chủ', icon: Home },
     { href: '/feed', label: 'Bảng tin', icon: Newspaper },
     { href: '/directory', label: 'Danh bạ', icon: Contact },
@@ -34,7 +34,7 @@ const navItems = [
     { href: '/media', label: 'Thư viện', icon: Image },
 ];
 
-const adminItems = [
+export const adminItems = [
     { href: '/admin/users', label: 'Quản lý Users', icon: Shield },
     { href: '/admin/edits', label: 'Kiểm duyệt', icon: ClipboardCheck },
     { href: '/admin/audit', label: 'Audit Log', icon: FileText },
@@ -49,7 +49,7 @@ export function Sidebar() {
     return (
         <aside
             className={cn(
-                'flex flex-col border-r bg-card transition-all duration-300 h-screen sticky top-0',
+                'hidden md:flex flex-col border-r bg-card transition-all duration-300 h-screen sticky top-0 shrink-0 z-40',
                 collapsed ? 'w-16' : 'w-64',
             )}
         >

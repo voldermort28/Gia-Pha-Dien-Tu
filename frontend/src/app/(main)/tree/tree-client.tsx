@@ -775,36 +775,36 @@ export default function TreeViewPage() {
     // connPath kept for compatibility but unused with batched rendering
 
     return (
-        <div className="flex flex-col h-[calc(100vh-80px)]">
+        <div className="flex flex-col h-[calc(100dvh-74px)] sm:h-[calc(100vh-80px)] w-full">
             {/* Header */}
-            <div className="flex items-center justify-between flex-wrap gap-2 px-1 pb-2">
-                <div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 px-1 pb-2 w-full">
+                <div className="w-full flex justify-between items-center sm:w-auto">
                     <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-                        <TreePine className="h-5 w-5" /> Cây gia phả
+                        <TreePine className="h-5 w-5" /> <span className="hidden sm:inline">Cây gia phả</span>
                     </h1>
-                    <p className="text-muted-foreground text-xs">
+                    <p className="text-muted-foreground text-xs text-right sm:text-left">
                         {layout ? `${layout.nodes.length} thành viên` : 'Đang tải...'}
                         {viewMode !== 'full' && focusPerson && (
                             <span className="ml-1 text-blue-500">
                                 • {viewMode === 'ancestor' ? 'Tổ tiên' : 'Hậu duệ'} của{' '}
-                                {treeData?.people.find(p => p.handle === focusPerson)?.displayName}
+                                <span className="font-semibold">{treeData?.people.find(p => p.handle === focusPerson)?.displayName}</span>
                             </span>
                         )}
                     </p>
                 </div>
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto no-scrollbar pb-1 sm:pb-0">
                     {/* View modes */}
                     <div className="flex rounded-lg border overflow-hidden text-xs">
                         {([['full', 'Toàn cảnh', Eye], ['ancestor', 'Tổ tiên', Users], ['descendant', 'Hậu duệ', GitBranch]] as const).map(([mode, label, Icon]) => (
                             <button key={mode} onClick={() => changeViewMode(mode)}
                                 className={`px-2.5 py-1.5 font-medium flex items-center gap-1 transition-colors ${mode !== 'full' ? 'border-l' : ''} ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
-                                <Icon className="h-3.5 w-3.5" /> {label}
+                                <Icon className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{label}</span>
                             </button>
                         ))}
                     </div>
                     {/* Search */}
                     <div className="relative">
-                        <div className="relative w-44">
+                        <div className="relative w-36 sm:w-44">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                             <Input placeholder="Tìm kiếm..." value={searchQuery}
                                 onChange={e => { setSearchQuery(e.target.value); setShowSearch(true); }}
