@@ -1269,15 +1269,17 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
                 onMouseLeave={() => onHover(null)}
                 onClick={(e) => { e.stopPropagation(); onClick(node.handle, x + CARD_W, y + CARD_H / 2); }}
             >
-                <div className="px-2 py-1.5 h-full flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center
-                        font-bold text-[9px] shadow-sm ring-1 ring-black/5 ${avatarBg} flex-shrink-0`}>
+                <div className="p-2 h-full flex items-start gap-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center
+                        font-bold text-[9px] shadow-sm ring-1 ring-black/5 ${avatarBg} flex-shrink-0 mt-0.5`}>
                         {initials}
                     </div>
-                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
-                        <p className="font-semibold text-[10px] leading-tight text-slate-800 line-clamp-3 break-words text-left">{node.displayName}</p>
-                        <div>
-                            <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-amber-100 text-amber-700">Đời {item.generation + 1}</span>
+                    <div className="flex-1 min-w-0 h-full relative">
+                        <div className="w-full">
+                            <p className="font-semibold text-[10px] leading-tight text-slate-800 line-clamp-2 break-words text-left" title={node.displayName}>{node.displayName}</p>
+                        </div>
+                        <div className="absolute bottom-0 left-0 w-full flex items-center">
+                            <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-amber-100 text-amber-700 whitespace-nowrap">Đời {item.generation + 1}</span>
                         </div>
                     </div>
                 </div>
@@ -1308,7 +1310,7 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
             onClick={(e) => { e.stopPropagation(); onClick(node.handle, x + CARD_W, y + CARD_H / 2); }}
             onContextMenu={(e) => { e.preventDefault(); onSetFocus(node.handle); }}
         >
-            <div className="px-2.5 py-2 h-full flex items-start gap-2.5">
+            <div className="p-2 h-full flex items-start gap-2.5">
                 {/* Avatar */}
                 <div className="relative flex-shrink-0 h-full flex items-center">
                     <div className={`w-11 h-11 rounded-full flex items-center justify-center
@@ -1316,31 +1318,34 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
                         {initials}
                     </div>
                     {isPatri && (
-                        <span className="absolute bottom-1 -right-1 w-4 h-4 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500
-                            text-white text-[8px] flex items-center justify-center shadow-sm font-bold ring-1 ring-white">Lê</span>
+                        <span className="absolute bottom-4 -right-1 w-4 h-4 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500
+                            text-white text-[8px] flex items-center justify-center shadow-sm font-bold ring-1 ring-white z-10">Lê</span>
                     )}
                 </div>
 
                 {/* Info */}
-                <div className="flex-1 min-w-0 h-full flex flex-col justify-between py-0.5">
-                    <p className="font-semibold text-[11px] leading-[13.5px] text-slate-800 line-clamp-3 break-words text-left">
-                        {node.displayName}
-                    </p>
-                    <div className="flex-shrink-0">
-                        <p className="text-[10px] text-slate-500">
+                <div className="flex-1 min-w-0 h-full relative">
+                    <div className="w-full">
+                        <p className="font-semibold text-[11px] leading-tight text-slate-800 line-clamp-3 break-words text-left" title={node.displayName}>
+                            {node.displayName}
+                        </p>
+                    </div>
+
+                    <div className="absolute bottom-0 left-0 w-full flex flex-col gap-[3px]">
+                        <p className="text-[10px] text-slate-500 truncate" title={node.birthYear ? `${node.birthYear}${node.deathYear ? ` — ${node.deathYear}` : node.isLiving ? ' — nay' : ''}` : ''}>
                             {node.birthYear
                                 ? `${node.birthYear}${node.deathYear ? ` — ${node.deathYear}` : node.isLiving ? ' — nay' : ''}`
                                 : '—'}
                         </p>
-                        <div className="mt-0.5 flex items-center gap-1">
-                            <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200/60">Đời {item.generation + 1}</span>
+                        <div className="flex flex-wrap items-center gap-1">
+                            <span className="text-[9px] font-semibold px-1 py-[1.5px] rounded bg-amber-100 text-amber-700 border border-amber-200/60 whitespace-nowrap">Đời {item.generation + 1}</span>
                             {isDead ? (
-                                <span className="text-[9px] text-slate-400">✝ Đã mất</span>
+                                <span className="text-[9px] text-slate-400 whitespace-nowrap">✝ Đã mất</span>
                             ) : (
-                                <span className="text-[9px] text-emerald-600 font-medium">● Còn sống</span>
+                                <span className="text-[9px] text-emerald-600 font-medium whitespace-nowrap">● Còn sống</span>
                             )}
                             {!isPatri && (
-                                <span className="text-[9px] text-slate-400 ml-0.5 flex-shrink-0">· Ngoại tộc</span>
+                                <span className="text-[9px] text-slate-400 ml-0.5 whitespace-nowrap flex-shrink-0">· Ngoại tộc</span>
                             )}
                         </div>
                     </div>
