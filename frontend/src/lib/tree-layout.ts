@@ -413,6 +413,27 @@ function assignPositions(
 // ═══ Main layout ═══
 
 export function computeLayout(people: TreeNode[], families: TreeFamily[]): LayoutResult {
+    // ═══ Pre-process: Auto-sync relationships to fix database inconsistencies ═══
+    // Sometimes a person has parentFamilies set, but is missing from family.children (or vice versa).
+    // This forces the layout to group them properly regardless of array state.
+    for (const p of people) {
+        for (const pf of (p.parentFamilies || [])) {
+            const fam = families.find(f => f.handle === pf);
+            if (fam && !fam.children.includes(p.handle)) {
+                fam.children.push(p.handle);
+            }
+        }
+    }
+    for (const fam of families) {
+        for (const childHandle of (fam.children || [])) {
+            const p = people.find(person => person.handle === childHandle);
+            if (p && !(p.parentFamilies || []).includes(fam.handle)) {
+                if (!p.parentFamilies) p.parentFamilies = [];
+                p.parentFamilies.push(fam.handle);
+            }
+        }
+    }
+
     const personMap = new Map(people.map(p => [p.handle, p]));
     const familyMap = new Map(families.map(f => [f.handle, f]));
 
