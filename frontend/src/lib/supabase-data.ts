@@ -166,9 +166,12 @@ export async function updatePersonLiving(
     handle: string,
     isLiving: boolean
 ): Promise<void> {
+    const updatePayload: Record<string, any> = { is_living: isLiving };
+    if (isLiving) updatePayload.death_year = null;
+
     const { error } = await supabase
         .from('people')
-        .update({ is_living: isLiving })
+        .update(updatePayload)
         .eq('handle', handle);
 
     if (error) console.error('Failed to update person living status:', error.message);
@@ -197,6 +200,11 @@ export async function updatePerson(
     if (fields.birthYear !== undefined) dbFields.birth_year = fields.birthYear;
     if (fields.deathYear !== undefined) dbFields.death_year = fields.deathYear;
     if (fields.isLiving !== undefined) dbFields.is_living = fields.isLiving;
+
+    // Safety check: if they are living, strip death year
+    if (dbFields.is_living === true) {
+        dbFields.death_year = null;
+    }
     if (fields.phone !== undefined) dbFields.phone = fields.phone;
     if (fields.email !== undefined) dbFields.email = fields.email;
     if (fields.currentAddress !== undefined) dbFields.current_address = fields.currentAddress;

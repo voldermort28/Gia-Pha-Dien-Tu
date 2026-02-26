@@ -80,7 +80,7 @@ export default function MemberForm({
                 gender,
                 generation: generation === "" ? null : Number(generation),
                 birth_year: birthYear === "" ? null : Number(birthYear),
-                death_year: deathYear === "" ? null : Number(deathYear),
+                death_year: (isLiving || deathYear === "") ? null : Number(deathYear),
                 is_living: isLiving,
                 is_patrilineal: gender === 1,
                 updated_at: new Date().toISOString(),

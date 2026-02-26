@@ -1029,7 +1029,7 @@ export default function TreeViewPage() {
                         onToggleLiving={(handle, isLiving) => {
                             setTreeData(prev => prev ? {
                                 ...prev,
-                                people: prev.people.map(p => p.handle === handle ? { ...p, isLiving } : p)
+                                people: prev.people.map(p => p.handle === handle ? { ...p, isLiving, deathYear: isLiving ? undefined : p.deathYear } : p)
                             } : null);
                             supaUpdatePersonLiving(handle, isLiving);
                         }}
@@ -1204,7 +1204,7 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
     const { node, x, y } = item;
     const isMale = node.gender === 1;
     const isFemale = node.gender === 2;
-    const isDead = !node.isLiving;
+    const isDead = !node.isLiving || !!node.deathYear;
     const isPatri = node.isPatrilineal;
 
     // ── Color system ──
