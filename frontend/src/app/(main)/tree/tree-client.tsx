@@ -1084,6 +1084,8 @@ export default function TreeViewPage() {
                     setRelativeModalState({ member: selectedMemberForDetail, type });
                     setSelectedMemberForDetail(null); // Close the detail modal
                 }}
+                allPeople={treeData?.people || []}
+                allFamilies={treeData?.families || []}
             />
 
             {/* Add Relative Modal */}

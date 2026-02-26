@@ -696,6 +696,100 @@ export function computeLayout(people: TreeNode[], families: TreeFamily[]): Layou
     };
 }
 
+// ═══ Helper to extract relationships with full sanitization ═══
+
+export function getRelationsForMember(memberHandle: string, people: TreeNode[], families: TreeFamily[]) {
+    const uniqueFamilies: TreeFamily[] = [];
+    const familyReplacements = new Map<string, string>();
+    const validHandles = new Set(people.map(p => p.handle));
+
+    const clonedFamilies = families.map(f => ({ ...f, children: [...f.children] }));
+
+    for (const fam of clonedFamilies) {
+        if (fam.fatherHandle && !validHandles.has(fam.fatherHandle)) fam.fatherHandle = undefined;
+        if (fam.motherHandle && !validHandles.has(fam.motherHandle)) fam.motherHandle = undefined;
+    }
+
+    const sortedFamilies = [...clonedFamilies].sort((a, b) => {
+        const aCount = (a.fatherHandle ? 1 : 0) + (a.motherHandle ? 1 : 0);
+        const bCount = (b.fatherHandle ? 1 : 0) + (b.motherHandle ? 1 : 0);
+        return bCount - aCount;
+    });
+
+    for (const fam of sortedFamilies) {
+        const existing = uniqueFamilies.find(f => {
+            if (f.fatherHandle === fam.fatherHandle && f.motherHandle === fam.motherHandle) return true;
+            if (fam.fatherHandle && !fam.motherHandle && f.fatherHandle === fam.fatherHandle) return true;
+            if (fam.motherHandle && !fam.fatherHandle && f.motherHandle === fam.motherHandle) return true;
+            return false;
+        });
+
+        if (existing) {
+            for (const child of fam.children) {
+                if (!existing.children.includes(child)) existing.children.push(child);
+            }
+            familyReplacements.set(fam.handle, existing.handle);
+        } else {
+            uniqueFamilies.push({ ...fam });
+        }
+    }
+
+    const mParents: TreeNode[] = [];
+    const mSpouses: TreeNode[] = [];
+    const mChildren: TreeNode[] = [];
+
+    const person = people.find(p => p.handle === memberHandle);
+    if (!person) return { parents: mParents, spouses: mSpouses, children: mChildren };
+
+    const cleanParentFamilies = [...new Set((person.parentFamilies || []).map(fh => familyReplacements.get(fh) || fh))];
+
+    // Auto-fix: if person is in a uniqueFamily's children but doesn't have it in parentFamilies
+    for (const fam of uniqueFamilies) {
+        if (fam.children.includes(memberHandle) && !cleanParentFamilies.includes(fam.handle)) {
+            cleanParentFamilies.push(fam.handle);
+        }
+    }
+
+    for (const pf of cleanParentFamilies) {
+        const fam = uniqueFamilies.find(f => f.handle === pf);
+        if (fam) {
+            if (fam.fatherHandle && fam.fatherHandle !== memberHandle) {
+                const f = people.find(p => p.handle === fam.fatherHandle);
+                if (f && !mParents.find(x => x.handle === f.handle)) mParents.push(f);
+            }
+            if (fam.motherHandle && fam.motherHandle !== memberHandle) {
+                const m = people.find(p => p.handle === fam.motherHandle);
+                if (m && !mParents.find(x => x.handle === m.handle)) mParents.push(m);
+            }
+        }
+    }
+
+    const ownFams = uniqueFamilies.filter(f => f.fatherHandle === memberHandle || f.motherHandle === memberHandle);
+
+    for (const fam of ownFams) {
+        const spouseHandle = fam.fatherHandle === memberHandle ? fam.motherHandle : fam.fatherHandle;
+        if (spouseHandle) {
+            const s = people.find(p => p.handle === spouseHandle);
+            if (s && !mSpouses.find(x => x.handle === s.handle)) mSpouses.push(s);
+        }
+
+        // Auto-fix children who claim this family as parentFamily but aren't in fam.children
+        const claimedChildren = people.filter(p => {
+            const userPFs = (p.parentFamilies || []).map(fh => familyReplacements.get(fh) || fh);
+            return userPFs.includes(fam.handle) && !fam.children.includes(p.handle);
+        });
+
+        const allChildHandles = [...new Set([...fam.children, ...claimedChildren.map(c => c.handle)])];
+
+        for (const ch of allChildHandles) {
+            const c = people.find(p => p.handle === ch);
+            if (c && !mChildren.find(x => x.handle === c.handle)) mChildren.push(c);
+        }
+    }
+
+    return { parents: mParents, spouses: mSpouses, children: mChildren };
+}
+
 // ═══ Generation assignment ═══
 
 function assignGenerations(people: TreeNode[], families: TreeFamily[]): Map<string, number> {

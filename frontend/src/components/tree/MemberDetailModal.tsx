@@ -6,6 +6,7 @@ import { motion, AnimatePresence, Variants } from "framer-motion"
 import { X, Edit2, UserPlus, Trash2, ExternalLink, CalendarDays, Hourglass, Info, Users, Phone, Briefcase, MapPin, Unlink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { TreeNode } from "@/lib/supabase-data"
+import { TreeFamily, getRelationsForMember } from "@/lib/tree-layout"
 import { useAuth } from "@/components/auth-provider"
 import { supabase } from "@/lib/supabase"
 import MemberForm from "./MemberForm"
@@ -32,6 +33,8 @@ interface MemberDetailModalProps {
     onEditSuccess?: () => void
     refreshData?: () => void
     mode?: 'view' | 'add'
+    allPeople?: TreeNode[]
+    allFamilies?: TreeFamily[]
 }
 
 export default function MemberDetailModal({
@@ -43,6 +46,8 @@ export default function MemberDetailModal({
     onEditSuccess,
     refreshData,
     mode = 'view',
+    allPeople,
+    allFamilies,
 }: MemberDetailModalProps) {
     const router = useRouter()
     const { isAdmin, isMember } = useAuth()
@@ -83,6 +88,17 @@ export default function MemberDetailModal({
                 .single();
             if (dbPerson) {
                 setExtraDetails(dbPerson);
+            }
+
+            // Use passed Tree data if available (guarantees consistency with tree UI)
+            if (allPeople && allPeople.length > 0 && allFamilies) {
+                const { parents, spouses, children } = getRelationsForMember(m.handle, allPeople, allFamilies);
+                setRelationships({
+                    parents: parents.map(p => ({ handle: p.handle, displayName: p.displayName, gender: p.gender })),
+                    spouses: spouses.map(p => ({ handle: p.handle, displayName: p.displayName, gender: p.gender })),
+                    children: children.map(p => ({ handle: p.handle, displayName: p.displayName, gender: p.gender }))
+                });
+                return;
             }
 
             const parents: RelationPerson[] = []
