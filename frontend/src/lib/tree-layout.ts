@@ -413,18 +413,45 @@ function assignPositions(
 // ═══ Main layout ═══
 
 export function computeLayout(people: TreeNode[], families: TreeFamily[]): LayoutResult {
-    // ═══ Pre-process: Auto-sync relationships to fix database inconsistencies ═══
-    // Sometimes a person has parentFamilies set, but is missing from family.children (or vice versa).
-    // This forces the layout to group them properly regardless of array state.
+    // ═══ Pre-process: Merge Duplicate Families and Auto-sync relationships ═══
+    // In some edge cases or bugged databases, the same parents have multiple family entries
+    const uniqueFamilies: TreeFamily[] = [];
+    const familyReplacements = new Map<string, string>(); // old handle -> kept handle
+
+    for (const fam of families) {
+        const key = `${fam.fatherHandle || ''}|${fam.motherHandle || ''}`;
+        const existing = uniqueFamilies.find(f => `${f.fatherHandle || ''}|${f.motherHandle || ''}` === key);
+        if (existing && key !== '|') {
+            // Merge children into existing, skipping duplicates
+            for (const child of fam.children) {
+                if (!existing.children.includes(child)) existing.children.push(child);
+            }
+            familyReplacements.set(fam.handle, existing.handle);
+        } else {
+            uniqueFamilies.push({ ...fam, children: [...fam.children] });
+        }
+    }
+
+    // Update people's family references to point to the unified families
+    for (const p of people) {
+        if (p.families) {
+            p.families = [...new Set(p.families.map(fh => familyReplacements.get(fh) || fh))];
+        }
+        if (p.parentFamilies) {
+            p.parentFamilies = [...new Set(p.parentFamilies.map(fh => familyReplacements.get(fh) || fh))];
+        }
+    }
+
+    // Auto-sync relationships
     for (const p of people) {
         for (const pf of (p.parentFamilies || [])) {
-            const fam = families.find(f => f.handle === pf);
+            const fam = uniqueFamilies.find(f => f.handle === pf);
             if (fam && !fam.children.includes(p.handle)) {
                 fam.children.push(p.handle);
             }
         }
     }
-    for (const fam of families) {
+    for (const fam of uniqueFamilies) {
         for (const childHandle of (fam.children || [])) {
             const p = people.find(person => person.handle === childHandle);
             if (p && !(p.parentFamilies || []).includes(fam.handle)) {
@@ -435,16 +462,16 @@ export function computeLayout(people: TreeNode[], families: TreeFamily[]): Layou
     }
 
     const personMap = new Map(people.map(p => [p.handle, p]));
-    const familyMap = new Map(families.map(f => [f.handle, f]));
+    const familyMap = new Map(uniqueFamilies.map(f => [f.handle, f]));
 
-    const gens = assignGenerations(people, families);
+    const gens = assignGenerations(people, uniqueFamilies);
 
     // Find root families (parents NOT children of any family)
     const childOfAnyFamily = new Set<string>();
-    for (const f of families) {
+    for (const f of uniqueFamilies) {
         for (const ch of f.children) childOfAnyFamily.add(ch);
     }
-    const rootFamilies = families.filter(f => {
+    const rootFamilies = uniqueFamilies.filter(f => {
         const fh = f.fatherHandle ? personMap.get(f.fatherHandle) : null;
         const mh = f.motherHandle ? personMap.get(f.motherHandle) : null;
         return (fh && !childOfAnyFamily.has(fh.handle)) || (mh && !childOfAnyFamily.has(mh.handle));
@@ -499,7 +526,7 @@ export function computeLayout(people: TreeNode[], families: TreeFamily[]): Layou
     const connections: Connection[] = [];
     const couples: PositionedCouple[] = [];
 
-    for (const fam of families) {
+    for (const fam of uniqueFamilies) {
         const fatherNode = fam.fatherHandle ? nodeMap.get(fam.fatherHandle) : undefined;
         const motherNode = fam.motherHandle ? nodeMap.get(fam.motherHandle) : undefined;
         if (!fatherNode && !motherNode) continue;
