@@ -46,6 +46,34 @@ export async function deleteFamily(handle: string) {
             return { success: false, error: "Chỉ có Admin mới có quyền xoá gia đình." }
         }
 
+        // --- CASCADING CLEANUP: Remove references from people table ---
+        // 1. Remove from parent_families (children of this family)
+        const { data: peopleWithParentFam } = await supabase
+            .from("people")
+            .select("handle, parent_families")
+            .contains("parent_families", [handle])
+
+        if (peopleWithParentFam) {
+            for (const p of peopleWithParentFam) {
+                const newFams = p.parent_families.filter((fh: string) => fh !== handle)
+                await supabase.from("people").update({ parent_families: newFams }).eq("handle", p.handle)
+            }
+        }
+
+        // 2. Remove from families (parents of this family)
+        const { data: peopleWithFam } = await supabase
+            .from("people")
+            .select("handle, families")
+            .contains("families", [handle])
+
+        if (peopleWithFam) {
+            for (const p of peopleWithFam) {
+                const newFams = p.families.filter((fh: string) => fh !== handle)
+                await supabase.from("people").update({ families: newFams }).eq("handle", p.handle)
+            }
+        }
+        // -----------------------------------------------------------------
+
         const { error } = await supabase
             .from("families")
             .delete()

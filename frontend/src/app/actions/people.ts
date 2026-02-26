@@ -70,6 +70,27 @@ export async function deletePerson(handle: string) {
             return { success: false, error: "Chỉ có Admin mới có quyền xoá thành viên." }
         }
 
+        // --- CASCADING CLEANUP: Remove references from families table ---
+        // 1. Remove from father_handle
+        await supabase.from("families").update({ father_handle: null }).eq("father_handle", handle)
+        // 2. Remove from mother_handle
+        await supabase.from("families").update({ mother_handle: null }).eq("mother_handle", handle)
+
+        // 3. Remove from children arrays
+        // Getting all families where this person is a child
+        const { data: famsWithChild } = await supabase
+            .from("families")
+            .select("handle, children")
+            .contains("children", [handle])
+
+        if (famsWithChild) {
+            for (const fam of famsWithChild) {
+                const newChildren = fam.children.filter((ch: string) => ch !== handle)
+                await supabase.from("families").update({ children: newChildren }).eq("handle", fam.handle)
+            }
+        }
+        // -----------------------------------------------------------------
+
         const { error } = await supabase
             .from("people")
             .delete()
