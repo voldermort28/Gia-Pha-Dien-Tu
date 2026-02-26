@@ -89,7 +89,7 @@ export async function linkRelativeAction(memberHandle: string, relativeHandle: s
             const husbandId = isMemberMale ? member.handle : relative.handle
             const wifeId = isMemberMale ? relative.handle : member.handle
 
-            // Check if family already exists
+            // Check if family already exists (both parents defined)
             const { data: existingFam } = await supabase
                 .from("families")
                 .select("handle")
@@ -100,14 +100,36 @@ export async function linkRelativeAction(memberHandle: string, relativeHandle: s
             let familyHandle = existingFam?.handle
 
             if (!familyHandle) {
-                familyHandle = `F_${husbandId}_${wifeId}`
-                const { error: insertErr } = await supabase.from("families").insert({
-                    handle: familyHandle,
-                    father_handle: husbandId,
-                    mother_handle: wifeId,
-                    children: []
-                })
-                if (insertErr) return { success: false, error: "Lỗi khi tạo gia đình mới: " + insertErr.message }
+                // Look for an existing single-parent family to "complete"
+                let singleFamQuery = supabase.from("families").select("handle")
+                if (isMemberMale) {
+                    singleFamQuery = singleFamQuery.eq("father_handle", husbandId).is("mother_handle", null)
+                } else {
+                    singleFamQuery = singleFamQuery.eq("mother_handle", wifeId).is("father_handle", null)
+                }
+
+                const { data: singleFam } = await singleFamQuery.maybeSingle()
+
+                if (singleFam) {
+                    // Complete the existing single-parent family
+                    familyHandle = singleFam.handle
+                    const { error: updateErr } = await supabase.from("families").update({
+                        father_handle: husbandId,
+                        mother_handle: wifeId
+                    }).eq("handle", familyHandle)
+
+                    if (updateErr) return { success: false, error: "Lỗi khi cập nhật gia đình: " + updateErr.message }
+                } else {
+                    // Create a brand new family
+                    familyHandle = `F_${husbandId}_${wifeId}`
+                    const { error: insertErr } = await supabase.from("families").insert({
+                        handle: familyHandle,
+                        father_handle: husbandId,
+                        mother_handle: wifeId,
+                        children: []
+                    })
+                    if (insertErr) return { success: false, error: "Lỗi khi tạo gia đình mới: " + insertErr.message }
+                }
             }
 
             // Update families array for both

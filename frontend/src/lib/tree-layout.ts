@@ -414,14 +414,36 @@ function assignPositions(
 
 export function computeLayout(people: TreeNode[], families: TreeFamily[]): LayoutResult {
     // ═══ Pre-process: Merge Duplicate Families and Auto-sync relationships ═══
-    // In some edge cases or bugged databases, the same parents have multiple family entries
     const uniqueFamilies: TreeFamily[] = [];
     const familyReplacements = new Map<string, string>(); // old handle -> kept handle
 
+    const validHandles = new Set(people.map(p => p.handle));
+
+    // Sanitize families: If a father or mother handle doesn't exist in people (ghost from DB deletion), nullify it.
     for (const fam of families) {
-        const key = `${fam.fatherHandle || ''}|${fam.motherHandle || ''}`;
-        const existing = uniqueFamilies.find(f => `${f.fatherHandle || ''}|${f.motherHandle || ''}` === key);
-        if (existing && key !== '|') {
+        if (fam.fatherHandle && !validHandles.has(fam.fatherHandle)) fam.fatherHandle = undefined;
+        if (fam.motherHandle && !validHandles.has(fam.motherHandle)) fam.motherHandle = undefined;
+    }
+
+    // Sort families so that 'complete' families (with both parents) come first
+    // This allows single-parent families to easily merge into them.
+    const sortedFamilies = [...families].sort((a, b) => {
+        const aCount = (a.fatherHandle ? 1 : 0) + (a.motherHandle ? 1 : 0);
+        const bCount = (b.fatherHandle ? 1 : 0) + (b.motherHandle ? 1 : 0);
+        return bCount - aCount;
+    });
+
+    for (const fam of sortedFamilies) {
+        // Look for an existing family that "subsumes" this one.
+        // E.g., if existing is Mother+Father, and this one is Father+Null or Null+Mother
+        const existing = uniqueFamilies.find(f => {
+            if (f.fatherHandle === fam.fatherHandle && f.motherHandle === fam.motherHandle) return true; // Exact match
+            if (fam.fatherHandle && !fam.motherHandle && f.fatherHandle === fam.fatherHandle) return true; // Merge Father+Null into Father+Mother
+            if (fam.motherHandle && !fam.fatherHandle && f.motherHandle === fam.motherHandle) return true; // Merge Null+Mother into Father+Mother
+            return false;
+        });
+
+        if (existing) {
             // Merge children into existing, skipping duplicates
             for (const child of fam.children) {
                 if (!existing.children.includes(child)) existing.children.push(child);
@@ -472,9 +494,17 @@ export function computeLayout(people: TreeNode[], families: TreeFamily[]): Layou
         for (const ch of f.children) childOfAnyFamily.add(ch);
     }
     const rootFamilies = uniqueFamilies.filter(f => {
-        const fh = f.fatherHandle ? personMap.get(f.fatherHandle) : null;
-        const mh = f.motherHandle ? personMap.get(f.motherHandle) : null;
-        return (fh && !childOfAnyFamily.has(fh.handle)) || (mh && !childOfAnyFamily.has(mh.handle));
+        const fatherNode = f.fatherHandle ? personMap.get(f.fatherHandle) : undefined;
+        const motherNode = f.motherHandle ? personMap.get(f.motherHandle) : undefined;
+
+        // Find the patrilineal (bloodline) parent in this family
+        const patrilineal = fatherNode?.isPatrilineal ? fatherNode : motherNode?.isPatrilineal ? motherNode : (fatherNode || motherNode);
+
+        // A family is a root ONLY if its patrilineal parent is NOT a child in another family
+        if (patrilineal) {
+            return !childOfAnyFamily.has(patrilineal.handle);
+        }
+        return false;
     });
 
     const allNodes: PositionedNode[] = [];

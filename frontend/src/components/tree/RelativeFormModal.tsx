@@ -57,7 +57,7 @@ export default function RelativeFormModal({
 
                 const { data: existingFam } = await supabase
                     .from("families")
-                    .select("handle")
+                    .select("handle, father_handle, mother_handle")
                     .eq("father_handle", husbandId)
                     .eq("mother_handle", wifeId)
                     .maybeSingle()
@@ -65,14 +65,38 @@ export default function RelativeFormModal({
                 let familyHandle = existingFam?.handle
 
                 if (!familyHandle) {
-                    familyHandle = `F_${husbandId}_${wifeId}`
-                    const { error: insertErr } = await supabase.from("families").insert({
-                        handle: familyHandle,
-                        father_handle: husbandId,
-                        mother_handle: wifeId,
-                        children: []
-                    })
-                    if (insertErr) throw new Error("Lỗi khi tạo gia đình mới: " + insertErr.message)
+                    // Look for an existing single-parent family to "complete"
+                    // If member is male, look for father_handle=husbandId and mother_handle=null
+                    // If member is female, look for mother_handle=wifeId and father_handle=null
+                    let singleFamQuery = supabase.from("families").select("handle")
+                    if (isMemberMale) {
+                        singleFamQuery = singleFamQuery.eq("father_handle", husbandId).is("mother_handle", null)
+                    } else {
+                        singleFamQuery = singleFamQuery.eq("mother_handle", wifeId).is("father_handle", null)
+                    }
+
+                    const { data: singleFam } = await singleFamQuery.maybeSingle()
+
+                    if (singleFam) {
+                        // Complete the existing single-parent family
+                        familyHandle = singleFam.handle
+                        const { error: updateErr } = await supabase.from("families").update({
+                            father_handle: husbandId,
+                            mother_handle: wifeId
+                        }).eq("handle", familyHandle)
+
+                        if (updateErr) throw new Error("Lỗi khi cập nhật gia đình: " + updateErr.message)
+                    } else {
+                        // Create a brand new family
+                        familyHandle = `F_${husbandId}_${wifeId}`
+                        const { error: insertErr } = await supabase.from("families").insert({
+                            handle: familyHandle,
+                            father_handle: husbandId,
+                            mother_handle: wifeId,
+                            children: []
+                        })
+                        if (insertErr) throw new Error("Lỗi khi tạo gia đình mới: " + insertErr.message)
+                    }
                 }
 
                 const updatePersonFamilies = async (person: any) => {
